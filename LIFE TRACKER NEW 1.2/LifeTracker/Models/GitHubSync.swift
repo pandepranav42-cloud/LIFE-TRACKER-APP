@@ -1179,15 +1179,28 @@ final class GitHubSync: ObservableObject {
         // never appears on the contribution graph. The account's own noreply
         // address always matches.
         if let me = await currentUser() {
-            let stamp = ISO8601DateFormatter().string(from: .now)
             let who: [String: Any] = ["name": me.displayName,
                                       "email": me.commitEmail,
-                                      "date": stamp]
+                                      "date": Self.commitStamp()]
             body["author"] = who
             body["committer"] = who
         }
         return try await send("repos/\(repo.full_name)/git/commits", method: "POST",
                               json: body, as: ShaOnly.self).sha
+    }
+
+    /// The commit's author date, in *this device's* timezone.
+    ///
+    /// `ISO8601DateFormatter()` on its own writes UTC — "…T19:11:00Z". GitHub
+    /// draws a contribution square on the date the commit claims in its own
+    /// offset, so a UTC stamp puts anything pushed between midnight and 5:30am
+    /// in India onto the *previous* day's square. Writing "+05:30" instead
+    /// puts it where you actually did the work.
+    static func commitStamp(_ date: Date = .now) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone.current
+        return formatter.string(from: date)
     }
 
     /// Who is signed in, loading it if the app hasn't yet.
