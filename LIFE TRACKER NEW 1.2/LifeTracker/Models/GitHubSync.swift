@@ -160,6 +160,44 @@ struct GitHubRelease: Codable, Identifiable, Equatable {
     var assetCount: Int { assets?.count ?? 0 }
 }
 
+/// Which address the app puts on a commit.
+///
+/// This decides whether a day's work reaches your contribution graph, and the
+/// right answer is not obvious — so it is a setting, not a guess.
+///
+/// Measured on this account: the days that produced 53 and 81 contributions
+/// were days every commit carried the account's **primary** address. Forcing
+/// the `id+login@users.noreply.github.com` form was meant to make counting
+/// more reliable and did not.
+///
+/// `accountDefault` leaves the author block out entirely, so GitHub stamps the
+/// commit with the address the token belongs to — the account's primary email,
+/// the same thing `git push` does with GitHub's own credentials.
+enum CommitIdentity: String, CaseIterable, Identifiable {
+    /// Let GitHub use the account's primary email (what counted before).
+    case accountDefault
+    /// Force `id+login@users.noreply.github.com`.
+    case noreply
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .accountDefault: return "My account's email"
+        case .noreply:        return "GitHub noreply address"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .accountDefault:
+            return "GitHub stamps the commit with the address your token belongs to — the same thing git push does."
+        case .noreply:
+            return "Hides your real address. Only counts towards your graph while it matches your current username."
+        }
+    }
+}
+
 enum GitHubError: LocalizedError {
     case noToken
     case http(Int, String)
@@ -279,6 +317,17 @@ final class GitHubSync: ObservableObject {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
+
+    /// Which address authors a commit. Defaults to letting GitHub decide,
+    /// which is what was counting before.
+    static var commitIdentity: CommitIdentity {
+        get {
+            CommitIdentity(rawValue: UserDefaults.standard.string(forKey: identityKey) ?? "")
+                ?? .accountDefault
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: identityKey) }
+    }
+    private static let identityKey = "github.commitIdentity"
 
     private static let tokenKey = "github.token"
     /// GitHub's Contents API tops out around 100 MB; keep a safe margin.
@@ -1304,26 +1353,23 @@ final class GitHubSync: ObservableObject {
         var body: [String: Any] = ["message": message, "tree": tree]
         body["parents"] = parents
 
-        // Say who wrote it, explicitly — and refuse to commit if we can't.
+        // Who the commit is authored as — see `CommitIdentity`.
         //
-        // Left out, GitHub authors the commit with whatever address the token
-        // resolves to, which is the account's *primary* email. That address
-        // only counts towards the contribution graph if it is verified, and an
-        // unverified one still shows your name and avatar on the commit — so
-        // the commit looks completely normal and silently counts for nobody.
-        // Both kinds are sitting in this repo's history, which is exactly how
-        // a day of real work can show up as one square.
-        //
-        // The account's own `id+login@users.noreply.github.com` is verified by
-        // construction, so naming it every time removes the question.
-        guard let me = await currentUser() else {
-            throw GitHubError.noAuthor
+        // Leaving the author block out is not an oversight: it hands the
+        // decision to GitHub, which stamps the commit with the address the
+        // token belongs to. On this account that is the address the days
+        // worth 53 and 81 contributions were authored with.
+        switch Self.commitIdentity {
+        case .accountDefault:
+            break
+        case .noreply:
+            guard let me = await currentUser() else { throw GitHubError.noAuthor }
+            let who: [String: Any] = ["name": me.displayName,
+                                      "email": me.commitEmail,
+                                      "date": Self.commitStamp()]
+            body["author"] = who
+            body["committer"] = who
         }
-        let who: [String: Any] = ["name": me.displayName,
-                                  "email": me.commitEmail,
-                                  "date": Self.commitStamp()]
-        body["author"] = who
-        body["committer"] = who
         return try await send("repos/\(repo.full_name)/git/commits", method: "POST",
                               json: body, as: ShaOnly.self).sha
     }

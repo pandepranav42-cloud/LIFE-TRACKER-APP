@@ -45,6 +45,8 @@ struct GitHubView: View {
     @State private var showAllNotebooks = false
     /// Files a drop or a pick couldn't read, with the reason macOS gave.
     @State private var stagingProblems: [String] = []
+    /// Which address goes on the commits this app makes.
+    @State private var commitIdentity: CommitIdentity = GitHubSync.commitIdentity
 
     /// How many notebooks the rail shows before you ask for the rest.
     private static let railPreview = 5
@@ -754,6 +756,24 @@ struct GitHubView: View {
                     }
                     .buttonStyle(.borderless)
                     .font(.mono(10))
+                    Spacer()
+                }
+
+                // Which address goes on the commit decides whether the day
+                // reaches your graph, so it belongs where you can see it.
+                HStack(spacing: 8) {
+                    Text("Author commits as")
+                        .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                    Picker("", selection: $commitIdentity) {
+                        ForEach(CommitIdentity.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .onChange(of: commitIdentity) { _, now in
+                        GitHubSync.commitIdentity = now
+                        show(now.blurb)
+                    }
                     Spacer()
                 }
 
