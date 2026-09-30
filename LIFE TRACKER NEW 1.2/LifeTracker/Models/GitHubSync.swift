@@ -78,9 +78,11 @@ struct GitHubRepo: Codable, Identifiable, Equatable, Hashable {
     let html_url: String
     let updated_at: String?
     let size: Int?
+    /// Commits in a fork never appear on the contribution graph.
+    let fork: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, full_name, description, default_branch, html_url, updated_at, size
+        case id, name, full_name, description, default_branch, html_url, updated_at, size, fork
         case isPrivate = "private"
     }
 
@@ -217,6 +219,18 @@ final class GitHubSync: ObservableObject {
     @Published private(set) var pushLog: [String] = []
     /// The commit the last push created, so you can open it on GitHub.
     @Published private(set) var lastCommitURL: URL?
+
+    /// Files the last push refused because the repository already has them,
+    /// byte for byte, at the same path. Git records nothing for a file that
+    /// hasn't changed, so pushing one again is a commit that does nothing —
+    /// which is what "it said Pushed and nothing happened" always was.
+    @Published private(set) var duplicates: [String] = []
+    /// Where those duplicates were headed, for the "try another folder" hint.
+    @Published private(set) var duplicateFolder: String = ""
+    /// Files in the last push that were already there, when others weren't.
+    @Published private(set) var skippedAsUnchanged = 0
+    /// Whether the last commit will show on the contribution graph, and why not.
+    @Published private(set) var contributionNote: String?
 
     /// The last contribution year fetched, kept so Life AI can summarise your
     /// GitHub activity without making a GraphQL call of its own on every
@@ -853,6 +867,10 @@ final class GitHubSync: ObservableObject {
 
         pushLog = []
         lastCommitURL = nil
+        duplicates = []
+        duplicateFolder = ""
+        skippedAsUnchanged = 0
+        contributionNote = nil
         note("repo \(repo.full_name) · branch \(repo.branch)")
 
         var failures: [(String, String)] = []
@@ -909,6 +927,38 @@ final class GitHubSync: ObservableObject {
             return failures
         }
 
+        // What the branch already holds at these paths. A git blob's sha is a
+        // hash of its bytes, so a file whose sha matches the one already there
+        // is the same file — putting it in the commit changes nothing.
+        let alreadyThere = await existingBlobs(repo, tree: head?.tree)
+        let unchanged = entries.filter { alreadyThere[$0.path] == $0.sha }
+        entries = entries.filter { alreadyThere[$0.path] != $0.sha }
+        skippedAsUnchanged = unchanged.count
+        if !unchanged.isEmpty {
+            note("already in the repo, unchanged: \(unchanged.count) file\(unchanged.count == 1 ? "" : "s")")
+        }
+
+        // Every single one is already there. Making the commit would move the
+        // branch onto a tree identical to the one it is on: GitHub accepts it,
+        // the repository looks untouched, and nothing explains why. Say so
+        // instead, and let you rename or choose another folder.
+        guard !entries.isEmpty else {
+            duplicates = unchanged.map(\.path)
+            duplicateFolder = (unchanged.first?.path as NSString?)?.deletingLastPathComponent ?? ""
+            note("nothing to push — every file is already in the repo, unchanged")
+            progress = 1
+            progressPercent = 100
+            progressLabel = ""
+            progressDetail = ""
+            isBusy = false
+            status = unchanged.count == 1
+                ? "That file is already in \(repo.name) — nothing to push"
+                : "All \(unchanged.count) files are already in \(repo.name) — nothing to push"
+            lastError = nil
+            // Not a failure: nothing broke. The view reads `duplicates`.
+            return []
+        }
+
         progressLabel = "Making the commit…"
         progressDetail = ""
         setProgress(Double(uploads.count) / steps)
@@ -927,6 +977,8 @@ final class GitHubSync: ObservableObject {
             if after?.commit == commit {
                 note("verified: branch now at \(commit.prefix(7))")
                 lastCommitURL = URL(string: "\(repo.html_url)/commit/\(commit)")
+                contributionNote = Self.contributionNote(for: repo, user: user)
+                note(contributionNote ?? "")
             } else {
                 note("NOT verified — branch is at \(after?.commit.prefix(7) ?? "unknown")")
                 failures.append((repo.branch,
@@ -973,12 +1025,18 @@ final class GitHubSync: ObservableObject {
         progressLabel = ""
         progressDetail = ""
         isBusy = false
+        // The count is what actually changed, not how many files were queued.
+        // "Pushed 65 files" next to a commit touching four is the reason a
+        // push that worked looked like a push that did nothing.
+        let alsoSkipped = skippedAsUnchanged > 0
+            ? " · \(skippedAsUnchanged) already up to date"
+            : ""
         if pushed == 0 {
             status = "Nothing was pushed"
         } else if failures.isEmpty {
-            status = "Pushed \(pushed) file\(pushed == 1 ? "" : "s") to \(repo.full_name)"
+            status = "Pushed \(pushed) changed file\(pushed == 1 ? "" : "s") to \(repo.full_name)\(alsoSkipped)"
         } else {
-            status = "Pushed \(pushed) of \(total) — \(failures.count) failed"
+            status = "Pushed \(pushed) of \(total) — \(failures.count) failed\(alsoSkipped)"
         }
         lastError = failures.isEmpty ? nil : failures.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
     }
@@ -1020,6 +1078,52 @@ final class GitHubSync: ObservableObject {
         }
         let commit = try await get("repos/\(repo.full_name)/git/commits/\(ref.object.sha)", as: Commit.self)
         return (ref.object.sha, commit.tree.sha)
+    }
+
+    /// Every file the branch already has, as path → blob sha, read in one
+    /// call. An empty repository (no tree yet) simply has none.
+    private func existingBlobs(_ repo: GitHubRepo, tree: String?) async -> [String: String] {
+        guard let tree else { return [:] }
+        struct Tree: Decodable {
+            struct Entry: Decodable { let path: String; let type: String; let sha: String }
+            let tree: [Entry]
+            let truncated: Bool?
+        }
+        do {
+            let full = try await get("repos/\(repo.full_name)/git/trees/\(tree)?recursive=1", as: Tree.self)
+            if full.truncated == true {
+                // A repository big enough to truncate the listing: better to
+                // let the push through than to call a file unchanged wrongly.
+                note("repo too large to list in one go — duplicate check skipped")
+                return [:]
+            }
+            var map: [String: String] = [:]
+            for entry in full.tree where entry.type == "blob" { map[entry.path] = entry.sha }
+            return map
+        } catch {
+            note("couldn't read the current tree (\(error.localizedDescription)) — duplicate check skipped")
+            return [:]
+        }
+    }
+
+    /// Whether a commit on this repository will show on your contribution
+    /// graph, and what is stopping it when it won't.
+    ///
+    /// GitHub's rules: the commit's author email has to belong to your
+    /// account, the commit has to be on the repository's default branch (or
+    /// gh-pages), and the repository must not be a fork. The app always
+    /// commits to `default_branch` and always authors with the account's own
+    /// noreply address, so the two it can't control are the fork case and, for
+    /// a private repository, the profile setting that hides private work.
+    static func contributionNote(for repo: GitHubRepo, user: GitHubUser?) -> String {
+        if repo.fork == true {
+            return "This is a fork — GitHub never counts commits in a fork towards your contribution graph."
+        }
+        let who = user.map { "as \($0.commitEmail)" } ?? "as your account"
+        if repo.isPrivate {
+            return "Counted \(who) on \(repo.branch). This repository is private, so it only shows on your graph with “Include private contributions on my profile” switched on in GitHub → Settings → Profile."
+        }
+        return "Counted \(who) on \(repo.branch) — it will show on your contribution graph."
     }
 
     /// One file's bytes, stored as a git blob. Reports upload progress so the

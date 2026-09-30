@@ -111,3 +111,42 @@ One column at every width now, Colab last: drop zone, repositories, repo
 browser, then notebooks. It used to become a 300pt side rail above 1120pt
 wide, which put notebooks level with the drop zone and squeezed the
 repositories into the remaining 800pt.
+
+## 7. Pushing the same files again
+
+Git stores a file by the hash of its contents, so an identical file at an
+identical path is not a change. A commit carrying only those records nothing:
+GitHub accepts it, the repository looks untouched, and the app still said
+"Pushed 65 files". That is what "it says pushed but nothing happened" was, every
+time.
+
+**Now.** Before making the commit the app reads the branch's tree once and
+compares each file's blob sha against what is already there.
+
+- **All of them already there** → no commit is made. The queue is kept, and a
+  panel says which files, why nothing can be recorded, and offers the two
+  things that work: rename them, or send them to another folder. One button
+  fills the destination with the next free folder name (`Sem5` → `Sem5 2`),
+  so it is one tap to somewhere they can actually land.
+- **Some already there** → the unchanged ones are dropped from the commit and
+  the rest go up. The toast counts what changed: "Pushed 4 changed files ·
+  61 already up to date".
+- A repository too large to list in one call skips the check rather than
+  risk calling a file unchanged wrongly.
+
+## 8. Pushes counting as contributions
+
+The commit already did the two things that matter — it is authored with your
+account's own `…@users.noreply.github.com` address, and it goes to the
+repository's default branch — so pushes from LifeTracker do count. (For
+`LIFE-TRACKER-APP`: public, not a fork, default branch `main`. It counts.)
+
+What was missing was telling you. After a verified push the report now says
+so, and names the two cases where it wouldn't:
+
+- **A fork.** GitHub never counts commits in a fork. This one is said *before*
+  the push, under the destination line, because the push itself works fine —
+  it just counts for nobody.
+- **A private repository.** It counts, but only shows on your graph with
+  "Include private contributions on my profile" switched on in GitHub →
+  Settings → Profile.

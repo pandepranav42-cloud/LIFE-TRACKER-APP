@@ -569,7 +569,18 @@ struct GitHubView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
 
+            // Said before the push, not after: a fork is the one case where
+            // the commit lands perfectly well and still counts for nobody.
+            if let repo = selected, repo.fork == true {
+                Label("This is a fork — commits here never reach your contribution graph.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.mono(10))
+                    .foregroundStyle(Color(hex: "B07C2E"))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if hub.isBusy { transferMeter }
+            duplicateNotice
             if let error = hub.lastError {
                 Text(error)
                     .font(.mono(11)).foregroundStyle(Color(hex: "C0453F"))
@@ -580,6 +591,93 @@ struct GitHubView: View {
         .padding(16)
         .background(StudyPalette.cardFill, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(StudyPalette.line))
+    }
+
+    /// Shown when a push was refused because the repository already has every
+    /// one of those files, unchanged, at the same path.
+    ///
+    /// Git stores a file by the hash of its contents: an identical file at an
+    /// identical path is not a change, so a commit carrying only those is a
+    /// commit that does nothing. GitHub takes it and the repository looks
+    /// untouched — which is exactly what "it said Pushed and nothing happened"
+    /// was. Better to stop here and offer the two things that do work.
+    @ViewBuilder
+    private var duplicateNotice: some View {
+        if !hub.duplicates.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.doc.fill")
+                        .font(.system(size: 12))
+                    Text(hub.duplicates.count == 1
+                         ? "That file is already in this repo"
+                         : "These \(hub.duplicates.count) files are already in this repo")
+                        .font(.mono(12, .bold))
+                    Spacer()
+                }
+                .foregroundStyle(Color(hex: "B07C2E"))
+
+                Text("Identical, byte for byte, at the same path — so there is nothing for a commit to record. Give them a new name, or send them to a folder that doesn't have them yet.")
+                    .font(.mono(10))
+                    .foregroundStyle(Palette.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(hub.duplicates.prefix(6), id: \.self) { path in
+                        Text(path)
+                            .font(.mono(10))
+                            .foregroundStyle(Palette.mutedText)
+                            .lineLimit(1).truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if hub.duplicates.count > 6 {
+                        Text("…and \(hub.duplicates.count - 6) more")
+                            .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        folder = suggestedFolder()
+                        show("Destination set to /\(folder) — press Push")
+                    } label: {
+                        Label("Put them in /\(suggestedFolder())", systemImage: "folder.badge.plus")
+                            .font(.mono(10))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(StudyPalette.brown)
+                    .controlSize(.small)
+
+                    Button("Clear the queue") { staged = [] }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    Spacer()
+                }
+            }
+            .padding(12)
+            .background(StudyPalette.callout, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(StudyPalette.line))
+        }
+    }
+
+    /// A destination the repository doesn't already use. Takes whatever is in
+    /// the folder field and counts up — "Sem5" → "Sem5 2" → "Sem5 3" — so one
+    /// tap gives the duplicates somewhere they can actually land.
+    private func suggestedFolder() -> String {
+        let base = folder.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
+        let root = base.isEmpty ? "LifeTracker" : base
+        // Strip a trailing counter so pressing this twice doesn't make "X 2 2".
+        var stem = root
+        if let range = stem.range(of: #" \d+$"#, options: .regularExpression) {
+            stem = String(stem[..<range.lowerBound])
+        }
+        let taken = Set(folders)
+        var candidate = stem
+        var counter = 1
+        while taken.contains(candidate) {
+            counter += 1
+            candidate = "\(stem) \(counter)"
+        }
+        return candidate
     }
 
     /// What the last push actually did, step by step. A push that claims to
@@ -593,6 +691,12 @@ struct GitHubView: View {
                     .font(.mono(11))
             }
             .foregroundStyle(Palette.accent)
+        }
+        if let note = hub.contributionNote {
+            Label(note, systemImage: "square.grid.3x3.fill")
+                .font(.mono(10))
+                .foregroundStyle(Palette.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
         }
         if !hub.pushLog.isEmpty {
             DisclosureGroup {
@@ -1013,11 +1117,17 @@ struct GitHubView: View {
         }
         Task { @MainActor in
             let failures = await hub.push(uploads, to: repo, message: message)
-            if failures.isEmpty {
+            if !hub.duplicates.isEmpty {
+                // Every file was already in the repo. Keep them queued — the
+                // whole point is that you rename or move them and push again.
+                show(hub.duplicates.count == 1
+                     ? "That file is already there — rename it or pick another folder"
+                     : "All \(hub.duplicates.count) files are already there — rename them or pick another folder")
+            } else if failures.isEmpty {
                 staged = []
                 message = ""
                 refreshTick += 1
-                show("Pushed \(uploads.count) file\(uploads.count == 1 ? "" : "s") to \(repo.name)")
+                show(hub.status)
             } else {
                 staged = staged.filter { item in
                     failures.contains { $0.0.hasSuffix(item.remotePath) }
