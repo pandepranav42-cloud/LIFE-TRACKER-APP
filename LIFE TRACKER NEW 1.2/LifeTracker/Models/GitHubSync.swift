@@ -152,11 +152,14 @@ enum GitHubError: LocalizedError {
     case http(Int, String)
     case badResponse
     case tooLarge(String)
+    case noAuthor
 
     var errorDescription: String? {
         switch self {
         case .noToken:
             return "Connect a GitHub token first."
+        case .noAuthor:
+            return "Couldn't work out which GitHub account to author the commit as, so nothing was committed — a commit authored with an address GitHub can't verify never reaches your contribution graph. Pull down to refresh the profile and push again."
         case .http(let code, let message):
             switch code {
             case 401: return "GitHub rejected the token (401). It may be expired or mistyped."
@@ -1173,18 +1176,26 @@ final class GitHubSync: ObservableObject {
         var body: [String: Any] = ["message": message, "tree": tree]
         body["parents"] = parents
 
-        // Say who wrote it, explicitly. Left out, the commit is authored with
-        // whatever address the token resolves to — and if that address isn't
-        // verified on the account, GitHub counts the commit for nobody and it
-        // never appears on the contribution graph. The account's own noreply
-        // address always matches.
-        if let me = await currentUser() {
-            let who: [String: Any] = ["name": me.displayName,
-                                      "email": me.commitEmail,
-                                      "date": Self.commitStamp()]
-            body["author"] = who
-            body["committer"] = who
+        // Say who wrote it, explicitly — and refuse to commit if we can't.
+        //
+        // Left out, GitHub authors the commit with whatever address the token
+        // resolves to, which is the account's *primary* email. That address
+        // only counts towards the contribution graph if it is verified, and an
+        // unverified one still shows your name and avatar on the commit — so
+        // the commit looks completely normal and silently counts for nobody.
+        // Both kinds are sitting in this repo's history, which is exactly how
+        // a day of real work can show up as one square.
+        //
+        // The account's own `id+login@users.noreply.github.com` is verified by
+        // construction, so naming it every time removes the question.
+        guard let me = await currentUser() else {
+            throw GitHubError.noAuthor
         }
+        let who: [String: Any] = ["name": me.displayName,
+                                  "email": me.commitEmail,
+                                  "date": Self.commitStamp()]
+        body["author"] = who
+        body["committer"] = who
         return try await send("repos/\(repo.full_name)/git/commits", method: "POST",
                               json: body, as: ShaOnly.self).sha
     }
