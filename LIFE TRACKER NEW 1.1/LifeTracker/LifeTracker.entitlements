@@ -10,9 +10,6 @@
 	<array>
 		<string>group.com.pranavpande.LifeTracker</string>
 	</array>
-	<!-- Hardened Runtime: the microphone, for talking to Life AI -->
-	<key>com.apple.security.device.audio-input</key>
-	<true/>
 	<!-- Files you pick yourself: drops, Save a Copy…, and the file pickers
 	     web pages put up (GitHub's "Upload a photo", JUNO's assignment upload) -->
 	<key>com.apple.security.files.user-selected.read-write</key>
