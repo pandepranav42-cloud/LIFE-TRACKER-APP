@@ -26,7 +26,6 @@ struct LifeTrackerApp: App {
             StudyLink.self,
             StudyTodo.self,
             MoodBoardImage.self,
-            UniPortal.self,
             AIConversation.self,
             AIMessage.self,
             AIChunk.self
