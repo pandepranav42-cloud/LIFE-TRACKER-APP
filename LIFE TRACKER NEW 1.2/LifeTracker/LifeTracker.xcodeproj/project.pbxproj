@@ -1,0 +1,746 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		025F4ED2A7270C33933C1054 /* GitHubSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77424FD68DE2E9D6049B9097 /* GitHubSync.swift */; };
+		14204C97ADBB9EA4DACEE43E /* AIProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBAC480BB890F7A3A48553FE /* AIProviders.swift */; };
+		1AFB96E5039B4545A414632C /* LifeTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89CC04975EA94923B56F8D2F /* LifeTrackerApp.swift */; };
+		1C79EB39C4C14F3192CE08F8 /* LifeTrackerWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6FCE3CEB360344B085799009 /* LifeTrackerWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		252849A1AB4C7D08DC4ABD10 /* ColabSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D2489399B4674296BEDD89 /* ColabSync.swift */; };
+		2B115751E564465787709F2B /* Quotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 699CBD1ADB5E4F78A7FD5F2C /* Quotes.swift */; };
+		2C79459491864E5CC5954BA1 /* AIIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A458E919588C81C53A2CD /* AIIndex.swift */; };
+		428C4ABD9B96B8C2ED861979 /* AIContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F64975A9C27C562AAD3EC5 /* AIContext.swift */; };
+		46E5BF195C3947B7B03F0C87 /* Transfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100FC936A2634DDBBFDCCF21 /* Transfer.swift */; };
+		4CAF933016DA434F8E34CFF3 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE30FA59E44A4A7BB7DFEAE5 /* Components.swift */; };
+		4F7C47D3A6631D699A20F948 /* GitHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61534300A1377CF6E9D5FD75 /* GitHubView.swift */; };
+		4FE3D0555E4B476AAFF714B3 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056AABED2C244ABF8C19BB33 /* Notifications.swift */; };
+		57864DA48C3C1EFCE2E4966D /* LifeAIBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F184DB3A518BDF13D10D382 /* LifeAIBridge.swift */; };
+		5D7A1B2C3D4E4F5061728394 /* StudyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8B2C3D4E5F406172839405 /* StudyView.swift */; };
+		5E29900AC35047C280964A93 /* OtherViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF6B5FE82964E4398D60A74 /* OtherViews.swift */; };
+		6536604034F44086AA6120F2 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A355DB05CED4304855A0A52 /* Models.swift */; };
+		71B05C78D8854D7683F29135 /* AccountViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6614AC22710547BA85F23D02 /* AccountViews.swift */; };
+		7D1447D6821B9072A5BE24A2 /* VoiceIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = D078479C939DA00D1C638828 /* VoiceIO.swift */; };
+		7DE23E559197489093B52EC9 /* DriveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31334A3B60A84DBC9DD0C410 /* DriveSync.swift */; };
+		84F59640510D4C059E914D77 /* Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F85ADB5C0C14D07BEC2B2CF /* Accounts.swift */; };
+		8FDE97078F6A4EADA49D410A /* UniversityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E9A2DD658F47D4A381175F /* UniversityView.swift */; };
+		90F54C79B94D4496A95540F9 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B233752485304B45B98062F4 /* WidgetBridge.swift */; };
+		98A25E567CF44DF1AF0F324D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 38A9EFA91A2F43FC85EE547B /* Assets.xcassets */; };
+		9DA10D544AB34BFAA00A35D7 /* CalendarSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F6BE320F8E14AA297A764DF /* CalendarSync.swift */; };
+		A01F4C5A4DAE474589879D9A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22C1A53D4444DEFA13EC582 /* ContentView.swift */; };
+		A5927EF7F05548188C7A4075 /* LifeTrackerWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966925673FC44A3E85AD971D /* LifeTrackerWidgets.swift */; };
+		A86E4C94B627E939E26F6DB5 /* LifeAIPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0644C89A37029D7D92C417A /* LifeAIPanel.swift */; };
+		AA5C29B4462C4DE8B4CCE1D3 /* HabitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFC6E1075B184E50B9977EC3 /* HabitsView.swift */; };
+		AAE09ADA1C04477583D4C76B /* GoogleG.png in Resources */ = {isa = PBXBuildFile; fileRef = 3A0DB437D7104EF2B0E2E30F /* GoogleG.png */; };
+		AB7A4386807933802B0D10A4 /* AIWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF54BE0BB8C56FB2D72237D /* AIWire.swift */; };
+		AEF5624B59F045BAAE6E8347 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763C901CEAB04D3EAE4E2A91 /* WidgetShared.swift */; };
+		BC74410A684449C08E92B677 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 541EB3D5C3324423A6CFDFBA /* DesignSystem.swift */; };
+		C807CE0EC6C74B3A96E9F3B3 /* Quotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 699CBD1ADB5E4F78A7FD5F2C /* Quotes.swift */; };
+		CC564BA8BBF4ED52E9BCADBE /* LifeAIActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98FB4A988CAAE6264D963B4F /* LifeAIActions.swift */; };
+		E359D947248C4FE19FC8B652 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763C901CEAB04D3EAE4E2A91 /* WidgetShared.swift */; };
+		E5251EFC79A441B5B724D976 /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAEB1A415CE14B858EEFC1E7 /* ScheduleView.swift */; };
+		E5499721EE7B4070A340B3DE /* TimetableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88834D81C44A45ED894A6658 /* TimetableView.swift */; };
+		EB6D86707B1A4C4BBBF2AF15 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2AA874657CF4424AC039A0B /* LoginView.swift */; };
+		F4B495B8C8264E0DAD2D1083 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05103D9A5AD4A6EB28987DA /* TodayView.swift */; };
+		FFB843A9A51B39EBE3660313 /* LifeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEE142B5AEF1D1472140733A /* LifeAI.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FE4CF37280C6411CB2C41985 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E63BEFB35B1A4A799EF17D5B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9950C24C19BD476D8A2CE33F;
+			remoteInfo = LifeTrackerWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		06111EF33A3B4909A448A2A0 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1C79EB39C4C14F3192CE08F8 /* LifeTrackerWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		04CA2B92BFAD4D638BF46BC2 /* LifeTrackerWidgets-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LifeTrackerWidgets-iOS.entitlements"; sourceTree = "<group>"; };
+		056AABED2C244ABF8C19BB33 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		0F85ADB5C0C14D07BEC2B2CF /* Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accounts.swift; sourceTree = "<group>"; };
+		100FC936A2634DDBBFDCCF21 /* Transfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transfer.swift; sourceTree = "<group>"; };
+		2BF54BE0BB8C56FB2D72237D /* AIWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AIWire.swift; path = Models/AIWire.swift; sourceTree = SOURCE_ROOT; };
+		31334A3B60A84DBC9DD0C410 /* DriveSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSync.swift; sourceTree = "<group>"; };
+		38A9EFA91A2F43FC85EE547B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3A0DB437D7104EF2B0E2E30F /* GoogleG.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = GoogleG.png; sourceTree = "<group>"; };
+		3DF6B5FE82964E4398D60A74 /* OtherViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OtherViews.swift; sourceTree = "<group>"; };
+		4A355DB05CED4304855A0A52 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		541EB3D5C3324423A6CFDFBA /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		61534300A1377CF6E9D5FD75 /* GitHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GitHubView.swift; path = Views/GitHubView.swift; sourceTree = SOURCE_ROOT; };
+		6614AC22710547BA85F23D02 /* AccountViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountViews.swift; sourceTree = "<group>"; };
+		699CBD1ADB5E4F78A7FD5F2C /* Quotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quotes.swift; sourceTree = "<group>"; };
+		6E8B2C3D4E5F406172839405 /* StudyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyView.swift; sourceTree = "<group>"; };
+		6FCE3CEB360344B085799009 /* LifeTrackerWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LifeTrackerWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E9A2DD658F47D4A381175F /* UniversityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversityView.swift; sourceTree = "<group>"; };
+		763C901CEAB04D3EAE4E2A91 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared.swift; sourceTree = "<group>"; };
+		77424FD68DE2E9D6049B9097 /* GitHubSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GitHubSync.swift; path = Models/GitHubSync.swift; sourceTree = SOURCE_ROOT; };
+		867C2E46ABD34B04B2879E38 /* LifeTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LifeTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		88834D81C44A45ED894A6658 /* TimetableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimetableView.swift; sourceTree = "<group>"; };
+		89CC04975EA94923B56F8D2F /* LifeTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeTrackerApp.swift; sourceTree = "<group>"; };
+		8F184DB3A518BDF13D10D382 /* LifeAIBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LifeAIBridge.swift; path = Models/LifeAIBridge.swift; sourceTree = SOURCE_ROOT; };
+		8F2A458E919588C81C53A2CD /* AIIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AIIndex.swift; path = Models/AIIndex.swift; sourceTree = SOURCE_ROOT; };
+		8F6BE320F8E14AA297A764DF /* CalendarSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSync.swift; sourceTree = "<group>"; };
+		948D235FD741404AA3133260 /* LifeTrackerWidgets-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LifeTrackerWidgets-macOS.entitlements"; sourceTree = "<group>"; };
+		966925673FC44A3E85AD971D /* LifeTrackerWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeTrackerWidgets.swift; sourceTree = "<group>"; };
+		98FB4A988CAAE6264D963B4F /* LifeAIActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LifeAIActions.swift; path = Models/LifeAIActions.swift; sourceTree = SOURCE_ROOT; };
+		AAEB1A415CE14B858EEFC1E7 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
+		AFC6E1075B184E50B9977EC3 /* HabitsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsView.swift; sourceTree = "<group>"; };
+		B1F64975A9C27C562AAD3EC5 /* AIContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AIContext.swift; path = Models/AIContext.swift; sourceTree = SOURCE_ROOT; };
+		B233752485304B45B98062F4 /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridge.swift; sourceTree = "<group>"; };
+		B8D2489399B4674296BEDD89 /* ColabSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ColabSync.swift; path = Models/ColabSync.swift; sourceTree = SOURCE_ROOT; };
+		BEE142B5AEF1D1472140733A /* LifeAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LifeAI.swift; path = Models/LifeAI.swift; sourceTree = SOURCE_ROOT; };
+		C22C1A53D4444DEFA13EC582 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C3FECD76F4714A87B5941C39 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CE30FA59E44A4A7BB7DFEAE5 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		D078479C939DA00D1C638828 /* VoiceIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VoiceIO.swift; path = Models/VoiceIO.swift; sourceTree = SOURCE_ROOT; };
+		D2AA874657CF4424AC039A0B /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		E0644C89A37029D7D92C417A /* LifeAIPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LifeAIPanel.swift; path = Views/LifeAIPanel.swift; sourceTree = SOURCE_ROOT; };
+		EBAC480BB890F7A3A48553FE /* AIProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AIProviders.swift; path = Models/AIProviders.swift; sourceTree = SOURCE_ROOT; };
+		F05103D9A5AD4A6EB28987DA /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		796C695FD578465289AA6D35 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD78B023FD094F24B6D69D1A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0420BECFDBA040A1A9DB6035 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				867C2E46ABD34B04B2879E38 /* LifeTracker.app */,
+				6FCE3CEB360344B085799009 /* LifeTrackerWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		358C5898FAD24FA99D9189E2 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				541EB3D5C3324423A6CFDFBA /* DesignSystem.swift */,
+				CE30FA59E44A4A7BB7DFEAE5 /* Components.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		542A90E12CFA4A15BF4EA506 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				4A355DB05CED4304855A0A52 /* Models.swift */,
+				100FC936A2634DDBBFDCCF21 /* Transfer.swift */,
+				B233752485304B45B98062F4 /* WidgetBridge.swift */,
+				056AABED2C244ABF8C19BB33 /* Notifications.swift */,
+				31334A3B60A84DBC9DD0C410 /* DriveSync.swift */,
+				8F6BE320F8E14AA297A764DF /* CalendarSync.swift */,
+				0F85ADB5C0C14D07BEC2B2CF /* Accounts.swift */,
+				699CBD1ADB5E4F78A7FD5F2C /* Quotes.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6A5AEC97A6B14FD384B1DABE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C22C1A53D4444DEFA13EC582 /* ContentView.swift */,
+				F05103D9A5AD4A6EB28987DA /* TodayView.swift */,
+				AFC6E1075B184E50B9977EC3 /* HabitsView.swift */,
+				AAEB1A415CE14B858EEFC1E7 /* ScheduleView.swift */,
+				88834D81C44A45ED894A6658 /* TimetableView.swift */,
+				6E8B2C3D4E5F406172839405 /* StudyView.swift */,
+				3DF6B5FE82964E4398D60A74 /* OtherViews.swift */,
+				73E9A2DD658F47D4A381175F /* UniversityView.swift */,
+				D2AA874657CF4424AC039A0B /* LoginView.swift */,
+				6614AC22710547BA85F23D02 /* AccountViews.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		7C2EF3F4417E43778A597821 = {
+			isa = PBXGroup;
+			children = (
+				89CC04975EA94923B56F8D2F /* LifeTrackerApp.swift */,
+				38A9EFA91A2F43FC85EE547B /* Assets.xcassets */,
+				3A0DB437D7104EF2B0E2E30F /* GoogleG.png */,
+				542A90E12CFA4A15BF4EA506 /* Models */,
+				6A5AEC97A6B14FD384B1DABE /* Views */,
+				358C5898FAD24FA99D9189E2 /* Components */,
+				BF0274BAE40A436A9213FA0E /* Shared */,
+				CDA20E0392704CD19E48F185 /* LifeTrackerWidgets */,
+				0420BECFDBA040A1A9DB6035 /* Products */,
+				77424FD68DE2E9D6049B9097 /* GitHubSync.swift */,
+				61534300A1377CF6E9D5FD75 /* GitHubView.swift */,
+				B8D2489399B4674296BEDD89 /* ColabSync.swift */,
+				BEE142B5AEF1D1472140733A /* LifeAI.swift */,
+				B1F64975A9C27C562AAD3EC5 /* AIContext.swift */,
+				8F2A458E919588C81C53A2CD /* AIIndex.swift */,
+				98FB4A988CAAE6264D963B4F /* LifeAIActions.swift */,
+				E0644C89A37029D7D92C417A /* LifeAIPanel.swift */,
+				8F184DB3A518BDF13D10D382 /* LifeAIBridge.swift */,
+				EBAC480BB890F7A3A48553FE /* AIProviders.swift */,
+				2BF54BE0BB8C56FB2D72237D /* AIWire.swift */,
+				D078479C939DA00D1C638828 /* VoiceIO.swift */,
+			);
+			sourceTree = "<group>";
+		};
+		BF0274BAE40A436A9213FA0E /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				763C901CEAB04D3EAE4E2A91 /* WidgetShared.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		CDA20E0392704CD19E48F185 /* LifeTrackerWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				966925673FC44A3E85AD971D /* LifeTrackerWidgets.swift */,
+				C3FECD76F4714A87B5941C39 /* Info.plist */,
+				948D235FD741404AA3133260 /* LifeTrackerWidgets-macOS.entitlements */,
+				04CA2B92BFAD4D638BF46BC2 /* LifeTrackerWidgets-iOS.entitlements */,
+			);
+			path = LifeTrackerWidgets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9950C24C19BD476D8A2CE33F /* LifeTrackerWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C8327BB2F14143B6A83F8980 /* Build configuration list for PBXNativeTarget "LifeTrackerWidgets" */;
+			buildPhases = (
+				775C119B2145420098D38597 /* Sources */,
+				DD78B023FD094F24B6D69D1A /* Frameworks */,
+				752309FB5E824303AB7A8560 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LifeTrackerWidgets;
+			productName = LifeTrackerWidgets;
+			productReference = 6FCE3CEB360344B085799009 /* LifeTrackerWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		FD60591CB30F400DA4311913 /* LifeTracker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8B19927C5B84F499A4ADEDA /* Build configuration list for PBXNativeTarget "LifeTracker" */;
+			buildPhases = (
+				DB7F73E1E640418780BA4FF2 /* Sources */,
+				796C695FD578465289AA6D35 /* Frameworks */,
+				3F7A70728E1E438A90604D64 /* Resources */,
+				06111EF33A3B4909A448A2A0 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				25DAD510A71A4E2D93B67D9E /* PBXTargetDependency */,
+			);
+			name = LifeTracker;
+			productName = LifeTracker;
+			productReference = 867C2E46ABD34B04B2879E38 /* LifeTracker.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E63BEFB35B1A4A799EF17D5B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
+				TargetAttributes = {
+					9950C24C19BD476D8A2CE33F = {
+						CreatedOnToolsVersion = 15.2;
+					};
+					FD60591CB30F400DA4311913 = {
+						CreatedOnToolsVersion = 15.2;
+					};
+				};
+			};
+			buildConfigurationList = 935B7C15F94F436D91F17D14 /* Build configuration list for PBXProject "LifeTracker" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 7C2EF3F4417E43778A597821;
+			productRefGroup = 0420BECFDBA040A1A9DB6035 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FD60591CB30F400DA4311913 /* LifeTracker */,
+				9950C24C19BD476D8A2CE33F /* LifeTrackerWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3F7A70728E1E438A90604D64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				98A25E567CF44DF1AF0F324D /* Assets.xcassets in Resources */,
+				AAE09ADA1C04477583D4C76B /* GoogleG.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		752309FB5E824303AB7A8560 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		775C119B2145420098D38597 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5927EF7F05548188C7A4075 /* LifeTrackerWidgets.swift in Sources */,
+				AEF5624B59F045BAAE6E8347 /* WidgetShared.swift in Sources */,
+				2B115751E564465787709F2B /* Quotes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB7F73E1E640418780BA4FF2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FDE97078F6A4EADA49D410A /* UniversityView.swift in Sources */,
+				46E5BF195C3947B7B03F0C87 /* Transfer.swift in Sources */,
+				E359D947248C4FE19FC8B652 /* WidgetShared.swift in Sources */,
+				90F54C79B94D4496A95540F9 /* WidgetBridge.swift in Sources */,
+				4FE3D0555E4B476AAFF714B3 /* Notifications.swift in Sources */,
+				EB6D86707B1A4C4BBBF2AF15 /* LoginView.swift in Sources */,
+				7DE23E559197489093B52EC9 /* DriveSync.swift in Sources */,
+				71B05C78D8854D7683F29135 /* AccountViews.swift in Sources */,
+				9DA10D544AB34BFAA00A35D7 /* CalendarSync.swift in Sources */,
+				84F59640510D4C059E914D77 /* Accounts.swift in Sources */,
+				1AFB96E5039B4545A414632C /* LifeTrackerApp.swift in Sources */,
+				6536604034F44086AA6120F2 /* Models.swift in Sources */,
+				C807CE0EC6C74B3A96E9F3B3 /* Quotes.swift in Sources */,
+				A01F4C5A4DAE474589879D9A /* ContentView.swift in Sources */,
+				F4B495B8C8264E0DAD2D1083 /* TodayView.swift in Sources */,
+				AA5C29B4462C4DE8B4CCE1D3 /* HabitsView.swift in Sources */,
+				E5251EFC79A441B5B724D976 /* ScheduleView.swift in Sources */,
+				E5499721EE7B4070A340B3DE /* TimetableView.swift in Sources */,
+				5D7A1B2C3D4E4F5061728394 /* StudyView.swift in Sources */,
+				5E29900AC35047C280964A93 /* OtherViews.swift in Sources */,
+				BC74410A684449C08E92B677 /* DesignSystem.swift in Sources */,
+				4CAF933016DA434F8E34CFF3 /* Components.swift in Sources */,
+				025F4ED2A7270C33933C1054 /* GitHubSync.swift in Sources */,
+				4F7C47D3A6631D699A20F948 /* GitHubView.swift in Sources */,
+				252849A1AB4C7D08DC4ABD10 /* ColabSync.swift in Sources */,
+				FFB843A9A51B39EBE3660313 /* LifeAI.swift in Sources */,
+				428C4ABD9B96B8C2ED861979 /* AIContext.swift in Sources */,
+				2C79459491864E5CC5954BA1 /* AIIndex.swift in Sources */,
+				CC564BA8BBF4ED52E9BCADBE /* LifeAIActions.swift in Sources */,
+				A86E4C94B627E939E26F6DB5 /* LifeAIPanel.swift in Sources */,
+				57864DA48C3C1EFCE2E4966D /* LifeAIBridge.swift in Sources */,
+				14204C97ADBB9EA4DACEE43E /* AIProviders.swift in Sources */,
+				AB7A4386807933802B0D10A4 /* AIWire.swift in Sources */,
+				7D1447D6821B9072A5BE24A2 /* VoiceIO.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		25DAD510A71A4E2D93B67D9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9950C24C19BD476D8A2CE33F /* LifeTrackerWidgets */;
+			targetProxy = FE4CF37280C6411CB2C41985 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		167B4269A6BC48BE97F607C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = auto;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		8BA23923B01E4D05AE14D844 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = auto;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B09845C85B394BE09FFB7CCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "LifeTracker-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "LifeTracker-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = LifeTracker.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				"COMBINE_HIDPI_IMAGES[sdk=macosx*]" = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LifeTracker;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "LifeTracker adds the dates you mark to your calendar and shows your existing calendar events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "LifeTracker adds the dates you mark to your calendar and shows your existing calendar events.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "LifeTracker uses Face ID to unlock your private journal.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Life AI listens to your microphone only while you are talking to it, so you can ask questions out loud instead of typing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say to Life AI into text. It runs on this device wherever the language has an on-device model.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = NO;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pranavpande.LifeTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		C5FB088F043541E0B675D4E0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "LifeTracker-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "LifeTracker-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = LifeTracker.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				"COMBINE_HIDPI_IMAGES[sdk=macosx*]" = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LifeTracker;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "LifeTracker adds the dates you mark to your calendar and shows your existing calendar events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "LifeTracker adds the dates you mark to your calendar and shows your existing calendar events.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "LifeTracker uses Face ID to unlock your private journal.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Life AI listens to your microphone only while you are talking to it, so you can ask questions out loud instead of typing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say to Life AI into text. It runs on this device wherever the language has an on-device model.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = NO;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pranavpande.LifeTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		EBABC5FE22C6404EB5E7BBEF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = "";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "LifeTrackerWidgets/LifeTrackerWidgets-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "LifeTrackerWidgets/LifeTrackerWidgets-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "LifeTrackerWidgets/LifeTrackerWidgets-macOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeTrackerWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LifeTracker;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Life AI listens to your microphone only while you are talking to it, so you can ask questions out loud instead of typing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say to Life AI into text. It runs on this device wherever the language has an on-device model.";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pranavpande.LifeTracker.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		ED4051DE930249A993C8A730 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = "";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "LifeTrackerWidgets/LifeTrackerWidgets-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = "LifeTrackerWidgets/LifeTrackerWidgets-iOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "LifeTrackerWidgets/LifeTrackerWidgets-macOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeTrackerWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LifeTracker;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Life AI listens to your microphone only while you are talking to it, so you can ask questions out loud instead of typing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say to Life AI into text. It runs on this device wherever the language has an on-device model.";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pranavpande.LifeTracker.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		935B7C15F94F436D91F17D14 /* Build configuration list for PBXProject "LifeTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BA23923B01E4D05AE14D844 /* Debug */,
+				167B4269A6BC48BE97F607C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A8B19927C5B84F499A4ADEDA /* Build configuration list for PBXNativeTarget "LifeTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B09845C85B394BE09FFB7CCC /* Debug */,
+				C5FB088F043541E0B675D4E0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C8327BB2F14143B6A83F8980 /* Build configuration list for PBXNativeTarget "LifeTrackerWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED4051DE930249A993C8A730 /* Debug */,
+				EBABC5FE22C6404EB5E7BBEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E63BEFB35B1A4A799EF17D5B /* Project object */;
+}
