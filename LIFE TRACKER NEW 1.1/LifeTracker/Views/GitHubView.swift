@@ -690,10 +690,8 @@ struct GitHubView: View {
     private var destinationSummary: String {
         guard let repo = selected else { return "Pick a repo below to choose where these files go." }
         let prefix = folder.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
+        let first = staged.first.map { ($0.remotePath as NSString).lastPathComponent } ?? "your files"
         let place = prefix.isEmpty ? repo.name : "\(repo.name)/\(prefix)"
-        // The whole remote path, not just the file name — a dropped folder
-        // keeps its structure, and the preview should show where it lands.
-        let first = staged.first?.remotePath ?? "your files"
         return staged.count > 1
             ? "Going to \(place) — \(staged.count) files"
             : "Going to \(place)/\(first)"
