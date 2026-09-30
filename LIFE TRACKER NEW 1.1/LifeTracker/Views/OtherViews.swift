@@ -1120,7 +1120,6 @@ struct SettingsView: View {
         deleteAll(StudyLink.self)
         deleteAll(StudyTodo.self)
         deleteAll(MoodBoardImage.self)
-        deleteAll(UniPortal.self)
         // Life AI's chat history and the passages indexed from your material.
         deleteAll(AIMessage.self)
         deleteAll(AIConversation.self)
