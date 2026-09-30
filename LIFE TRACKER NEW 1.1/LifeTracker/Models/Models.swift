@@ -515,56 +515,6 @@ struct ProgressEngine {
     }
 }
 
-// MARK: - University portals
-
-/// A university portal you added yourself.
-///
-/// LifeTracker ships with none. The University page starts empty with an Add
-/// button, and whichever ERP your college runs — JUNO, ERP, Samarth, Moodle,
-/// anything with a login page — becomes one of these. Each keeps its own
-/// cookies (the web view separates them by host) and its own saved logins.
-@Model
-final class UniPortal {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var urlString: String
-    var colorHex: String
-    var iconName: String
-    var sortIndex: Int
-    var addedAt: Date
-    /// Used to put the one you actually use at the top.
-    var lastOpenedAt: Date?
-
-    init(name: String, urlString: String, colorHex: String = "D9B38C",
-         iconName: String = "graduationcap.fill", sortIndex: Int = 0) {
-        self.id = UUID()
-        self.name = name
-        self.urlString = urlString
-        self.colorHex = colorHex
-        self.iconName = iconName
-        self.sortIndex = sortIndex
-        self.addedAt = .now
-    }
-
-    var url: URL? { URL(string: urlString) }
-
-    /// What the saved logins and the cookie jar are keyed on.
-    var host: String {
-        (url?.host ?? "").replacingOccurrences(of: "www.", with: "")
-    }
-
-    var displayName: String {
-        name.trimmingCharacters(in: .whitespaces).isEmpty ? (host.isEmpty ? "Portal" : host) : name
-    }
-}
-
-/// Icons offered when adding a portal — no logos, just plain signifiers.
-enum PortalIcons {
-    static let all = ["graduationcap.fill", "building.columns.fill", "book.closed.fill",
-                      "globe", "person.text.rectangle.fill", "doc.text.fill",
-                      "chart.bar.doc.horizontal.fill", "studentdesk"]
-}
-
 // MARK: - Study
 
 /// A class / subject in the Study space. Holds its own syllabus, notes and
