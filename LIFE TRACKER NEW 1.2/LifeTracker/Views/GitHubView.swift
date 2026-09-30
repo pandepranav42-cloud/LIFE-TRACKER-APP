@@ -451,7 +451,10 @@ struct GitHubView: View {
                     .foregroundStyle(Palette.mutedText)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, staged.isEmpty ? 44 : 26)
+            // A fixed height. This used to shrink from 44 to 26 the instant a
+            // file was queued, so everything below it jumped up the moment you
+            // chose one.
+            .padding(.vertical, 34)
             .background(dropTargeted ? StudyPalette.callout : Color.clear,
                         in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12)
@@ -558,8 +561,15 @@ struct GitHubView: View {
                 }
             }
 
-            ViewThatFits(in: .horizontal) {
+            // Laid out by the window's width, never by what's in the fields.
+            //
+            // This was a ViewThatFits, which picks a layout by measuring its
+            // contents — so typing a commit message or picking a longer folder
+            // flipped the whole row between one line and three, mid-keystroke.
+            // A width the user controls is a decision that holds still.
+            if width > 820 {
                 HStack(spacing: 8) { folderField; messageField; pushButton; releaseButton }
+            } else {
                 VStack(spacing: 8) {
                     folderField
                     messageField
@@ -572,6 +582,7 @@ struct GitHubView: View {
                 .foregroundStyle(Palette.mutedText)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // Said before the push, not after: a fork is the one case where
             // the commit lands perfectly well and still counts for nobody.
@@ -583,7 +594,9 @@ struct GitHubView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if hub.isBusy { transferMeter }
+            // Always present, so starting a push doesn't shove the page
+            // down by its height and then pull it back up again.
+            transferMeter.opacity(hub.isBusy ? 1 : 0)
             duplicateNotice
             if let error = hub.lastError {
                 Text(error)
@@ -904,6 +917,12 @@ struct GitHubView: View {
         } label: {
             Label(pushLabel, systemImage: "arrow.up.circle.fill")
                 .lineLimit(1)
+                // The label used to carry the repo or folder name, so the
+                // button grew and shrank with every keystroke in the folder
+                // field and dragged the row around with it. Where the files
+                // are going is already spelled out underneath.
+                .frame(minWidth: 96)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.borderedProminent)
         .tint(Color(hex: "2DA44E"))
@@ -911,10 +930,7 @@ struct GitHubView: View {
     }
 
     private var pushLabel: String {
-        guard let repo = selected else { return "Pick a repo" }
-        let prefix = folder.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
-        guard !prefix.isEmpty else { return "Push to \(repo.name)" }
-        return "Push to \((prefix as NSString).lastPathComponent)"
+        selected == nil ? "Pick a repo" : "Push"
     }
 
     private var releaseButton: some View {
