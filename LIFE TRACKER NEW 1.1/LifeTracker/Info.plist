@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Transport Security.
+
+	     Apple blocks plain http by default. That is the right default for the
+	     app's own traffic and it stays in force there: the Gemini / OpenAI /
+	     Anthropic calls, GitHub, Google Drive and Calendar all still have to be
+	     https, because this exception does not cover them.
+
+	     University portals are a different world. Plenty of college ERPs in
+	     India are still http-only, or start on https and redirect to http, and
+	     a portal that can't load is a portal you can't use. Since the app now
+	     lets you add whichever portal your college runs, the web view has to be
+	     allowed to load them.
+
+	     NSAllowsArbitraryLoadsInWebContent is the narrow key for exactly this:
+	     it relaxes the rule for WKWebView content only, not for URLSession.
+	     Nothing the app itself sends leaves the device unencrypted.
+
+	     Note for the App Store: this key needs a justification at review.
+	     "The app embeds university portals chosen by the user, many of which
+	     are http-only" is the reason. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
