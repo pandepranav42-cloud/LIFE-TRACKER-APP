@@ -594,7 +594,11 @@ struct GitHubView: View {
             // Always present, so starting a push doesn't shove the page
             // down by its height and then pull it back up again.
             transferMeter.opacity(hub.isBusy ? 1 : 0)
-            if let error = hub.lastError {
+            // Only when the push genuinely failed. A file that stumbled and
+            // was retried, on a push whose commit went up fine, was leaving a
+            // red "cancelled" sitting under a success — the whole story is in
+            // "What the push did" for anyone who wants it.
+            if let error = hub.lastError, hub.lastCommitURL == nil {
                 Text(error)
                     .font(.mono(11)).foregroundStyle(Color(hex: "C0453F"))
                     .fixedSize(horizontal: false, vertical: true)
@@ -618,7 +622,6 @@ struct GitHubView: View {
             }
             .foregroundStyle(Palette.accent)
         }
-        contributionCheck
         if !hub.pushLog.isEmpty {
             DisclosureGroup {
                 VStack(alignment: .leading, spacing: 3) {
@@ -645,36 +648,6 @@ struct GitHubView: View {
                 Text("What the push did")
                     .font(.mono(10))
                     .foregroundStyle(Palette.mutedText)
-            }
-        }
-    }
-
-    /// What GitHub actually counts for you today, read back from the same
-    /// contributions data its graph is drawn from.
-    ///
-    /// The graph on github.com is a cached page and lags a push by minutes;
-    /// this asks the source directly, so "did that count?" stops being a
-    /// guess. A zero here with commits pushed is a real signal, and the most
-    /// common cause is an address GitHub hasn't verified.
-    @ViewBuilder
-    private var contributionCheck: some View {
-        if let count = hub.todayCount {
-            HStack(spacing: 8) {
-                Text("\(count) contribution\(count == 1 ? "" : "s") today")
-                    .font(.mono(10))
-                    .foregroundStyle(count > 0 ? Palette.mutedText : Color(hex: "C0453F"))
-                Button("Check") { Task { await hub.refreshTodayCount() } }
-                    .buttonStyle(.borderless)
-                    .font(.mono(10))
-                // Only said when it is actually wrong: an address GitHub has
-                // not verified is the one thing that silently costs you a day.
-                if !hub.unverifiedEmails.isEmpty {
-                    Text("· verify \(hub.unverifiedEmails.joined(separator: ", ")) in GitHub settings")
-                        .font(.mono(10))
-                        .foregroundStyle(Color(hex: "C0453F"))
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                Spacer()
             }
         }
     }
