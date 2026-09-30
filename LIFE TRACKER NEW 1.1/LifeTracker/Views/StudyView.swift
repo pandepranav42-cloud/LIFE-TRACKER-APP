@@ -54,6 +54,7 @@ struct StudyView: View {
     @State private var pickingAvatar = false
     @State private var showPortal = false
     @State private var showGitHub = false
+    @AppStorage("portal.name") private var portalName: String = "JUNO — DYPIU"
     @Environment(\.layoutWidth) private var width
     private var contentWidth: CGFloat { width - 2 * AppLayout.pagePadding(width) }
     private var compact: Bool { AppLayout.isCompact(width) }
@@ -130,11 +131,11 @@ struct StudyView: View {
             .blendedToolbar()
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    // Your university portals — whichever ones you added.
+                    // University portal (JUNO) — opens inside the app.
                     Button { showPortal = true } label: {
-                        Label("University", systemImage: "graduationcap")
+                        Label("JUNO", systemImage: "graduationcap")
                     }
-                    .help("Your university portals — attendance, marks, results and fees, inside the app")
+                    .help("Open \(portalName): attendance, marks, results and fees")
 
                     // Push files and folders to GitHub without the terminal.
                     Button { showGitHub = true } label: {
