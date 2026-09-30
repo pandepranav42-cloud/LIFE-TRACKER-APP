@@ -85,7 +85,7 @@ struct SidebarView: View {
             Section {
                 ForEach([AppSection.today, .habits, .schedule, .timetable, .study, .calendar, .progress, .journal]) { s in
                     NavigationLink(value: s) {
-                        row(s)
+                        Label(s.title, systemImage: s.icon)
                     }
                 }
             } header: {
@@ -96,7 +96,7 @@ struct SidebarView: View {
             }
             Section {
                 NavigationLink(value: AppSection.settings) {
-                    row(.settings)
+                    Label(AppSection.settings.title, systemImage: AppSection.settings.icon)
                 }
             }
         }
@@ -105,19 +105,5 @@ struct SidebarView: View {
         .background(Palette.sidebar.ignoresSafeArea())
         .blendedToolbar()
         .navigationTitle("Life")
-    }
-
-    /// One sidebar row. The icon is drawn in the label's own colour rather
-    /// than the system accent — a sidebar full of blue glyphs fought with the
-    /// app's warm palette. On the selected row it turns white, because the
-    /// selection pill behind it is filled.
-    private func row(_ section: AppSection) -> some View {
-        Label {
-            Text(section.title)
-        } icon: {
-            Image(systemName: section.icon)
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(selection == section ? Color.white : Color.primary)
-        }
     }
 }
