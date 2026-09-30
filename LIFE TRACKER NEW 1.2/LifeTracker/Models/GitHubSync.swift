@@ -162,54 +162,6 @@ struct GitHubRelease: Codable, Identifiable, Equatable {
     var assetCount: Int { assets?.count ?? 0 }
 }
 
-/// Which address the app puts on a commit.
-///
-/// This decides whether a day's work reaches your contribution graph, and the
-/// right answer is not obvious — so it is a setting, not a guess.
-///
-/// Measured on this account: the days that produced 53 and 81 contributions
-/// were days every commit carried the account's **primary** address. Forcing
-/// the `id+login@users.noreply.github.com` form was meant to make counting
-/// more reliable and did not.
-///
-/// `accountDefault` leaves the author block out entirely, so GitHub stamps the
-/// commit with the address the token belongs to — the account's primary email,
-/// the same thing `git push` does with GitHub's own credentials.
-enum CommitIdentity: String, CaseIterable, Identifiable {
-    /// Name the account's own primary address on every commit.
-    case primary
-    /// Name an address you type in yourself.
-    case custom
-    /// Say nothing and let GitHub stamp the token's address.
-    case accountDefault
-    /// Force `id+login@users.noreply.github.com`.
-    case noreply
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .primary:        return "My GitHub email"
-        case .custom:         return "A specific address…"
-        case .accountDefault: return "Let GitHub decide"
-        case .noreply:        return "GitHub noreply address"
-        }
-    }
-
-    var blurb: String {
-        switch self {
-        case .primary:
-            return "Every commit is authored with your account's own address, named explicitly."
-        case .custom:
-            return "Every commit is authored with the address you typed. It has to be one GitHub has verified on your account, or the commit counts for nobody."
-        case .accountDefault:
-            return "GitHub stamps the commit with the address your token belongs to — the same thing git push does."
-        case .noreply:
-            return "Hides your real address. Only counts towards your graph while it matches your current username."
-        }
-    }
-}
-
 enum GitHubError: LocalizedError {
     case noToken
     case http(Int, String)
@@ -333,30 +285,6 @@ final class GitHubSync: ObservableObject {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
-
-    /// Which address authors a commit. Defaults to letting GitHub decide,
-    /// which is what was counting before.
-    static var commitIdentity: CommitIdentity {
-        get {
-            CommitIdentity(rawValue: UserDefaults.standard.string(forKey: identityKey) ?? "")
-                ?? .primary
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: identityKey) }
-    }
-    private static let identityKey = "github.commitIdentity"
-
-    /// The address typed in for `.custom`.
-    static var customCommitEmail: String {
-        get {
-            (UserDefaults.standard.string(forKey: customEmailKey) ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        set {
-            UserDefaults.standard.set(
-                newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: customEmailKey)
-        }
-    }
-    private static let customEmailKey = "github.commitEmail.custom"
 
     private static let tokenKey = "github.token"
     /// GitHub's Contents API tops out around 100 MB; keep a safe margin.
@@ -1104,25 +1032,15 @@ final class GitHubSync: ObservableObject {
             note("already in the repo, unchanged: \(unchanged.count) file\(unchanged.count == 1 ? "" : "s")")
         }
 
-        // Every single one is already there. Making the commit would move the
-        // branch onto a tree identical to the one it is on: GitHub accepts it,
-        // the repository looks untouched, and nothing explains why. Say so
-        // instead, and let you rename or choose another folder.
-        guard !entries.isEmpty else {
+        // Everything was already there. The commit is made anyway: it carries
+        // the same tree its parent does, so the repository doesn't change, but
+        // it is a real commit on the branch and it counts like any other. The
+        // duplicates are named in the log so the empty diff isn't a mystery.
+        if entries.isEmpty {
             duplicates = unchanged.map(\.path)
             duplicateFolder = (unchanged.first?.path as NSString?)?.deletingLastPathComponent ?? ""
-            note("nothing to push — every file is already in the repo, unchanged")
-            progress = 1
-            progressPercent = 100
-            progressLabel = ""
-            progressDetail = ""
-            isBusy = false
-            status = unchanged.count == 1
-                ? "That file is already in \(repo.name) — nothing to push"
-                : "All \(unchanged.count) files are already in \(repo.name) — nothing to push"
-            lastError = nil
-            // Not a failure: nothing broke. The view reads `duplicates`.
-            return []
+            note("every file is already in the repo, unchanged — committing anyway")
+            entries = unchanged
         }
 
         progressLabel = "Making the commit…"
@@ -1350,18 +1268,35 @@ final class GitHubSync: ObservableObject {
         throw lastError
     }
 
+    /// Sends one file's bytes as a git blob.
+    ///
+    /// This used to drive a `URLSessionUploadTask` by hand, wrapped in a
+    /// continuation, with a KVO observer on `task.progress` for a byte-level
+    /// meter. That machinery is what produced a bare "cancelled" on a 20 KB
+    /// file — a file far too small for any timeout — and there was no way to
+    /// see which part of it gave up.
+    ///
+    /// `URLSession.upload(for:from:)` is the same request with none of the
+    /// hand-rolled parts. The meter now moves once per file instead of once
+    /// per percent, which for a queue of notebooks is what you were reading
+    /// anyway.
     private func sendBlob(_ repo: GitHubRepo, data: Data,
                           onProgress: @escaping (Double) -> Void) async throws -> String {
         struct ShaOnly: Decodable { let sha: String }
         var request = try self.request("repos/\(repo.full_name)/git/blobs", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // The body is handed to the upload task separately, so the request
-        // must not hold a second copy of it — a big file is already 50 MB of
-        // bytes plus 67 MB of base64.
         let payload = try JSONSerialization.data(
             withJSONObject: ["content": data.base64EncodedString(), "encoding": "base64"])
         request.httpBody = nil
-        let reply = try await upload(request, body: payload, file: nil, onProgress: onProgress)
+
+        onProgress(0.05)
+        let (reply, response) = try await Self.session.upload(for: request, from: payload)
+        onProgress(1)
+
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else {
+            throw GitHubError.http(code, Self.message(from: reply))
+        }
         guard let sha = try? JSONDecoder().decode(ShaOnly.self, from: reply).sha else {
             throw GitHubError.badResponse
         }
@@ -1390,20 +1325,18 @@ final class GitHubSync: ObservableObject {
         var body: [String: Any] = ["message": message, "tree": tree]
         body["parents"] = parents
 
-        // Who the commit is authored as — see `CommitIdentity`.
         //
         // Leaving the author block out is not an oversight: it hands the
         // decision to GitHub, which stamps the commit with the address the
         // token belongs to. On this account that is the address the days
         // worth 53 and 81 contributions were authored with.
+        // Authored as whoever is signed in — always, with nothing to choose.
+        // Whoever installs this app gets their own GitHub account's address on
+        // their own commits, which is the only answer that is right for
+        // everybody. When it can't be read, the block is left out and GitHub
+        // stamps the token's address, which comes to the same thing.
         let me = await currentUser()
-        let address: String?
-        switch Self.commitIdentity {
-        case .primary:        address = await primaryCommitEmail()
-        case .custom:         address = Self.customCommitEmail.isEmpty ? nil : Self.customCommitEmail
-        case .noreply:        address = me?.commitEmail
-        case .accountDefault: address = nil
-        }
+        let address = await primaryCommitEmail()
         if let address, let me {
             let who: [String: Any] = ["name": me.displayName,
                                       "email": address,

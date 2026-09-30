@@ -46,9 +46,6 @@ struct GitHubView: View {
     /// Files a drop or a pick couldn't read, with the reason macOS gave.
     @State private var stagingProblems: [String] = []
     /// Which address goes on the commits this app makes.
-    @State private var commitIdentity: CommitIdentity = GitHubSync.commitIdentity
-    /// The address typed in when "A specific address…" is chosen.
-    @State private var customEmail: String = GitHubSync.customCommitEmail
 
     /// How many notebooks the rail shows before you ask for the rest.
     private static let railPreview = 5
@@ -626,14 +623,14 @@ struct GitHubView: View {
                     Image(systemName: "doc.on.doc.fill")
                         .font(.system(size: 12))
                     Text(hub.duplicates.count == 1
-                         ? "That file is already in this repo"
-                         : "These \(hub.duplicates.count) files are already in this repo")
+                         ? "That file was already in this repo"
+                         : "Those \(hub.duplicates.count) files were already in this repo")
                         .font(.mono(12, .bold))
                     Spacer()
                 }
                 .foregroundStyle(Color(hex: "B07C2E"))
 
-                Text("Identical, byte for byte, at the same path — so there is nothing for a commit to record. Give them a new name, or send them to a folder that doesn't have them yet.")
+                Text("Identical, byte for byte, at the same path, so the commit went up with an empty diff — the repository looks unchanged. Rename them or pick another folder if you wanted the files to actually land somewhere new.")
                     .font(.mono(10))
                     .foregroundStyle(Palette.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -776,52 +773,25 @@ struct GitHubView: View {
 
                 // Which address goes on the commit decides whether the day
                 // reaches your graph, so it belongs where you can see it.
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text("Author commits as")
+                // No choice to make: commits are authored as whoever is
+                // signed in. Shown, not chosen.
+                if let mine = hub.primaryEmail {
+                    HStack(spacing: 6) {
+                        Text("Commits are authored as")
                             .font(.mono(10)).foregroundStyle(Palette.mutedText)
-                        Picker("", selection: $commitIdentity) {
-                            ForEach(CommitIdentity.allCases) { Text($0.title).tag($0) }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .onChange(of: commitIdentity) { _, now in
-                            GitHubSync.commitIdentity = now
-                            show(now.blurb)
-                        }
-                        if commitIdentity == .primary, let mine = hub.primaryEmail {
-                            Text(mine)
-                                .font(.mono(10)).foregroundStyle(Palette.mutedText)
-                                .lineLimit(1).truncationMode(.middle)
-                        }
+                        Text(mine)
+                            .font(.mono(10, .semibold)).foregroundStyle(Palette.mutedText)
+                            .lineLimit(1).truncationMode(.middle)
                         Spacer()
                     }
+                }
 
-                    if commitIdentity == .custom {
-                        TextField("you@example.com", text: $customEmail)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.mono(11))
-                            .frame(maxWidth: 320)
-                            #if os(iOS)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            #endif
-                            .onChange(of: customEmail) { _, now in
-                                GitHubSync.customCommitEmail = now
-                            }
-                        Text("Must be an address GitHub has verified on your account, or the commit counts for nobody.")
-                            .font(.mono(10)).foregroundStyle(Palette.mutedText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if hub.primaryEmailVerified == false, let mine = hub.primaryEmail {
-                        Label("GitHub has not verified \(mine) — verify it under Settings → Emails or commits authored with it will not count.",
-                              systemImage: "exclamationmark.triangle.fill")
-                            .font(.mono(10))
-                            .foregroundStyle(Color(hex: "C0453F"))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                if hub.primaryEmailVerified == false, let mine = hub.primaryEmail {
+                    Label("GitHub has not verified \(mine) — verify it under Settings → Emails or these commits will not count.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.mono(10))
+                        .foregroundStyle(Color(hex: "C0453F"))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if hub.todayCount == 0 {
@@ -1239,13 +1209,7 @@ struct GitHubView: View {
         }
         Task { @MainActor in
             let failures = await hub.push(uploads, to: repo, message: message)
-            if !hub.duplicates.isEmpty {
-                // Every file was already in the repo. Keep them queued — the
-                // whole point is that you rename or move them and push again.
-                show(hub.duplicates.count == 1
-                     ? "That file is already there — rename it or pick another folder"
-                     : "All \(hub.duplicates.count) files are already there — rename them or pick another folder")
-            } else if failures.isEmpty {
+            if failures.isEmpty {
                 staged = []
                 message = ""
                 refreshTick += 1
