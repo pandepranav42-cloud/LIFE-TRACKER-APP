@@ -134,25 +134,17 @@ struct GitHubView: View {
 
     private var connected: some View {
         ScrollView {
-            Group {
-                if width > 1120 {
-                    HStack(alignment: .top, spacing: 20) {
-                        // No vertical Divider here: inside a ScrollView it asks
-                        // for unbounded height and takes the row's sizing with it.
-                        mainColumn(withColab: false).frame(maxWidth: 800, alignment: .leading)
-                        Rectangle()
-                            .fill(Palette.hairline)
-                            .frame(width: 1)
-                            .frame(maxHeight: 600)
-                        colabRail.frame(width: 300)
-                    }
-                } else {
-                    // Narrow window: Colab sits inline near the top rather than
-                    // under the repo list, where a long repo would bury it.
-                    mainColumn(withColab: true)
-                        .frame(maxWidth: 1000, alignment: .leading)
-                }
+            // One column at every width, Colab last. It used to be a side rail
+            // on a wide window, which put notebooks level with the drop zone
+            // and left the repositories squeezed into 800pt beside it. Reading
+            // straight down — drop, pick a repo, browse it, then notebooks —
+            // is the order you actually work in.
+            VStack(alignment: .leading, spacing: 20) {
+                mainColumn
+                Divider().overlay(Palette.hairline)
+                colabRail
             }
+            .frame(maxWidth: 1000, alignment: .leading)
             .padding(AppLayout.pagePadding(width))
             .padding(.bottom, 48)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,21 +158,13 @@ struct GitHubView: View {
         }
     }
 
-    /// `withColab` folds the Colab section into this column — used when the
-    /// window is too narrow for a side rail. It goes above the repositories,
-    /// because notebooks are what you pick *before* choosing where to push.
-    private func mainColumn(withColab: Bool) -> some View {
+    /// Everything above Colab: who you are, what's queued, and where it goes.
+    private var mainColumn: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
             dropZone
             stagingProblemList
             if !staged.isEmpty { stagedList }
-            if withColab {
-                VStack(alignment: .leading, spacing: 20) {
-                    colabRail
-                    Divider().overlay(Palette.hairline)
-                }
-            }
             repoPicker
             if let repo = selected {
                 Divider().overlay(Palette.hairline)
@@ -199,9 +183,10 @@ struct GitHubView: View {
         }
     }
 
-    // MARK: Colab rail
+    // MARK: Colab
 
-    /// Your Colab notebooks, one tap from the push queue.
+    /// Your Colab notebooks, one tap from the push queue. Sits at the bottom
+    /// of the page, under the repositories.
     private var colabRail: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {

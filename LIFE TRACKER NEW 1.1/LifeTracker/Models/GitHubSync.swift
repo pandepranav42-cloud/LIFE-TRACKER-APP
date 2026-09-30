@@ -161,7 +161,15 @@ enum GitHubError: LocalizedError {
             case 403: return "GitHub refused (403). The token is probably missing a scope — \(message)"
             case 404: return "Not found (404). Either it doesn't exist or the token can't see it."
             case 409: return "That repository is empty or the branch doesn't exist yet (409)."
-            case 422: return "GitHub wouldn't accept that: \(message)"
+            case 422:
+                // Push protection. GitHub's own wording ("Repository rule
+                // violations found") says nothing about what to do, and the
+                // failure gets pinned on the branch rather than on the file
+                // that actually carries the key — so say it plainly.
+                if Self.looksLikeSecretBlock(message) {
+                    return "GitHub blocked this push: one of these files has an API key or token written into it. Take the key out of the file — keep it in Settings, or in a Secrets file git ignores — then push again. GitHub refuses the whole commit until it's gone, so nothing went up. (GitHub said: \(message))"
+                }
+                return "GitHub wouldn't accept that: \(message)"
             default: return "GitHub error \(code): \(message)"
             }
         case .badResponse:
@@ -169,6 +177,20 @@ enum GitHubError: LocalizedError {
         case .tooLarge(let name):
             return "“\(name)” is over 50 MB — GitHub's upload API won't take it."
         }
+    }
+
+    /// Whether a 422 is secret-scanning push protection rather than an
+    /// ordinary validation complaint.
+    static func looksLikeSecretBlock(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        return lowered.contains("secret") || lowered.contains("push protection")
+            || lowered.contains("rule violation")
+    }
+
+    /// True when this error is push protection, wherever it surfaced.
+    var isSecretBlock: Bool {
+        if case .http(422, let message) = self { return Self.looksLikeSecretBlock(message) }
+        return false
     }
 }
 
@@ -914,8 +936,15 @@ final class GitHubSync: ObservableObject {
             }
         } catch {
             note("commit FAILED: \(error.localizedDescription)")
-            // The commit is all-or-nothing, so every file in it failed.
-            for entry in entries { failures.append((entry.path, error.localizedDescription)) }
+            // Push protection rejects the ref update, not the file, so the
+            // message belongs to the push as a whole — repeating it once per
+            // file just buries it.
+            if let github = error as? GitHubError, github.isSecretBlock {
+                failures.append((repo.branch, error.localizedDescription))
+            } else {
+                // The commit is all-or-nothing, so every file in it failed.
+                for entry in entries { failures.append((entry.path, error.localizedDescription)) }
+            }
             finishPush(pushed: 0, of: uploads.count, repo: repo, failures: failures)
             return failures
         }
