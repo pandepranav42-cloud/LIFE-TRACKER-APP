@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Transport Security.
+
+	     Apple blocks plain http by default. That is the right default for the
+	     app's own traffic and it stays in force there: the Gemini / OpenAI /
+	     Anthropic calls, GitHub, Google Drive and Calendar all still have to be
+	     https, because this exception does not cover them.
+
+	     University portals are a different world. Plenty of college ERPs in
+	     India are still http-only, or start on https and redirect to http, and
+	     a portal that can't load is a portal you can't use. Since the app now
+	     lets you add whichever portal your college runs, the web view has to be
+	     allowed to load them.
+
+	     NSAllowsArbitraryLoadsInWebContent is the narrow key for exactly this:
+	     it relaxes the rule for WKWebView content only, not for URLSession.
+	     Nothing the app itself sends leaves the device unencrypted.
+
+	     Note for the App Store: this key needs a justification at review.
+	     "The app embeds university portals chosen by the user, many of which
+	     are http-only" is the reason. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+	<!-- Files you pick, drop or save — macOS 15 and later.
+
+	     LifeTracker is not sandboxed; it runs under the Hardened Runtime. On
+	     recent macOS that is no longer enough on its own: reading anything in
+	     Desktop, Documents, Downloads, an external disk or a network share is
+	     gated by TCC, and an app with no usage string for that location is
+	     refused *without ever showing a prompt*.
+
+	     That is what broke pushing to GitHub after a macOS upgrade: files
+	     dragged in from Downloads could not be read, so a push went up with
+	     nothing in it, while Colab notebooks — which the app downloads into
+	     its own temporary folder — kept working. With these keys present
+	     macOS asks once, per folder, and remembers the answer. -->
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>LifeTracker needs to read the files you drop in or pick from your Desktop so it can push them to GitHub and file them into a subject.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>LifeTracker needs to read the files you drop in or pick from Documents so it can push them to GitHub and file them into a subject.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>LifeTracker needs to read the files you drop in or pick from Downloads so it can push them to GitHub and file them into a subject.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>LifeTracker needs to read files you drop in from a USB drive or external disk so it can push them to GitHub.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>LifeTracker needs to read files you drop in from a network share so it can push them to GitHub.</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>LifeTracker needs to read files you drop in from iCloud Drive, Google Drive or Dropbox so it can push them to GitHub.</string>
+</dict>
+</plist>

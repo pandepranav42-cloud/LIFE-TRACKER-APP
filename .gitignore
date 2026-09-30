@@ -1,0 +1,14 @@
+# Anything holding a real API key. Never commit these — GitHub's push
+# protection will refuse the push, and a key in a repo is a key anyone with
+# the repo has.
+Secrets.xcconfig
+Secrets.plist
+*.secrets.plist
+.env
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.DS_Store
