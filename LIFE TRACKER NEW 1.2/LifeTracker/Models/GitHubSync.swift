@@ -262,6 +262,24 @@ final class GitHubSync: ObservableObject {
     /// message. Filled in whenever the profile screen loads the green dots.
     @Published private(set) var contributionCache: ContributionYear?
 
+    /// The app's own session for GitHub traffic.
+    ///
+    /// `URLSession.shared` times a request out after 60 seconds and is shared
+    /// with Drive, Colab, the web views and Life AI's streaming — a big
+    /// notebook going up as base64 on a slow connection runs out of time, or
+    /// gets dropped when the system trims the shared session, and the error
+    /// that surfaces is a bare "cancelled". A session of our own, with room to
+    /// breathe and `waitsForConnectivity`, removes both.
+    static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 120       // per stalled segment
+        config.timeoutIntervalForResource = 3600     // a whole slow upload
+        config.waitsForConnectivity = true
+        config.httpMaximumConnectionsPerHost = 4
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
+
     private static let tokenKey = "github.token"
     /// GitHub's Contents API tops out around 100 MB; keep a safe margin.
     static let maxUploadBytes = 50 * 1024 * 1024
@@ -457,7 +475,7 @@ final class GitHubSync: ObservableObject {
         ])
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await Self.session.data(for: request)
             guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return ContributionYear()
             }
@@ -631,7 +649,7 @@ final class GitHubSync: ObservableObject {
         let box = Box()
 
         return try await withCheckedThrowingContinuation { continuation in
-            let task = URLSession.shared.downloadTask(with: request) { location, response, error in
+            let task = Self.session.downloadTask(with: request) { location, response, error in
                 guard !box.finished else { return }
                 box.finished = true
                 box.observation?.invalidate()
@@ -1199,9 +1217,54 @@ final class GitHubSync: ObservableObject {
         return "Counted \(who) on \(repo.branch) — it will show on your contribution graph."
     }
 
+    /// Whether an error is worth trying again.
+    ///
+    /// "cancelled" (-999), a dropped connection and a timeout all mean the
+    /// transfer died in transit, not that GitHub refused it. Treating those as
+    /// permanent is what turned one wobble on a big notebook into "that file
+    /// didn't go through".
+    private static func isTransient(_ error: Error) -> Bool {
+        let code = (error as? URLError)?.code
+        switch code {
+        case .cancelled, .networkConnectionLost, .timedOut, .notConnectedToInternet,
+             .cannotConnectToHost, .dnsLookupFailed, .resourceUnavailable,
+             .internationalRoamingOff, .callIsActive, .dataNotAllowed,
+             .secureConnectionFailed:
+            return true
+        default: break
+        }
+        // GitHub's own hiccups: 502/503/504, and 5xx generally.
+        if let github = error as? GitHubError, case .http(let status, _) = github {
+            return (500...599).contains(status)
+        }
+        return false
+    }
+
     /// One file's bytes, stored as a git blob. Reports upload progress so the
     /// meter still moves for a big file.
+    ///
+    /// Retried up to three times on a transfer that died rather than one
+    /// GitHub refused, because a multi-megabyte notebook going up as base64
+    /// is exactly where a flaky connection shows itself.
     private func makeBlob(_ repo: GitHubRepo, data: Data,
+                          onProgress: @escaping (Double) -> Void) async throws -> String {
+        var lastError: Error = GitHubError.badResponse
+        for attempt in 1...3 {
+            do {
+                return try await sendBlob(repo, data: data, onProgress: onProgress)
+            } catch {
+                lastError = error
+                guard Self.isTransient(error), attempt < 3 else { throw error }
+                await note("\(error.localizedDescription) — retrying (\(attempt) of 2)")
+                // Start this file's meter over; the next attempt re-sends it.
+                onProgress(0)
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
+            }
+        }
+        throw lastError
+    }
+
+    private func sendBlob(_ repo: GitHubRepo, data: Data,
                           onProgress: @escaping (Double) -> Void) async throws -> String {
         struct ShaOnly: Decodable { let sha: String }
         var request = try self.request("repos/\(repo.full_name)/git/blobs", method: "POST")
@@ -1349,9 +1412,9 @@ final class GitHubSync: ObservableObject {
 
             let task: URLSessionUploadTask
             if let file {
-                task = URLSession.shared.uploadTask(with: request, fromFile: file, completionHandler: finish)
+                task = Self.session.uploadTask(with: request, fromFile: file, completionHandler: finish)
             } else {
-                task = URLSession.shared.uploadTask(with: request, from: body ?? Data(), completionHandler: finish)
+                task = Self.session.uploadTask(with: request, from: body ?? Data(), completionHandler: finish)
             }
             box.observation = task.progress.observe(\.fractionCompleted, options: [.new]) { progress, _ in
                 let fraction = progress.fractionCompleted
@@ -1370,7 +1433,7 @@ final class GitHubSync: ObservableObject {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {
             throw GitHubError.http(code, Self.message(from: data))

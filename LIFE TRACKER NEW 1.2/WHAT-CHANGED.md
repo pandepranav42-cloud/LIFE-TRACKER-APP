@@ -181,3 +181,28 @@ tree, a commit, then the branch ref is moved — the same four objects
 indistinguishable: clone the repo with plain `git clone` and `git log` shows
 ordinary commits with ordinary parents and authors. The API is not why a
 contribution does or doesn't count; the author address is.
+
+## 10. "cancelled", and a push reported as a failure after it worked
+
+Two separate faults behind one screenshot.
+
+**The upload died mid-file.** Everything went through `URLSession.shared`,
+whose request timeout is 60 seconds and which the whole app shares with Drive,
+Colab, the web views and Life AI's streaming. A multi-megabyte notebook going
+up as base64 is the first thing to run out of that budget or get trimmed, and
+the error it surfaces is a bare `cancelled` (`URLError.cancelled`, -999) —
+which says nothing and looks like the user pressed something.
+
+- GitHub traffic now uses the app's own `URLSession`: 120s per stalled
+  segment, an hour for a whole transfer, `waitsForConnectivity` on.
+- A blob that dies in transit is **retried, up to three times**, with the
+  meter restarting for that file. Retried are the errors that mean the
+  transfer died — cancelled, connection lost, timed out, no route — and
+  GitHub's own 5xx. An error GitHub *chose* to send (401, 403, 422…) is
+  never retried, because trying again cannot change it.
+
+**The report was wrong.** A commit carrying eight of nine files was announced
+as "9 files didn't go through". The toast now distinguishes the cases: how
+many went up and how many didn't when a commit was made, and a plain "nothing
+was committed" when there wasn't one. The files that failed stay in the queue,
+so pressing Push again retries exactly those.

@@ -1181,10 +1181,24 @@ struct GitHubView: View {
                 refreshTick += 1
                 show(hub.status)
             } else {
+                // Keep only what didn't make it, so pressing Push again
+                // retries exactly those.
                 staged = staged.filter { item in
                     failures.contains { $0.0.hasSuffix(item.remotePath) }
                 }
-                show("\(failures.count) file\(failures.count == 1 ? "" : "s") didn't go through")
+                refreshTick += 1
+                // Say what actually happened. A commit that went up with
+                // eight of nine files is not "the files didn't go through",
+                // and reporting it that way sent me looking for a push that
+                // had in fact worked.
+                if hub.lastCommitURL != nil {
+                    let went = uploads.count - failures.count
+                    show(went > 0
+                         ? "Pushed \(went) file\(went == 1 ? "" : "s") · \(failures.count) didn't make it — press Push to retry those"
+                         : hub.status)
+                } else {
+                    show("Nothing was committed — \(failures.count) file\(failures.count == 1 ? "" : "s") couldn't be sent")
+                }
             }
         }
     }
