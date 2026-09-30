@@ -135,24 +135,35 @@ final class GeminiWire: AIWire {
         return AIJSON.request(url, headers: ["x-goog-api-key": config.apiKey])
     }
 
+    /// Just the two models in `GeminiModels`.
+    ///
+    /// Google lists three dozen — previews, dated snapshots, experiments,
+    /// text-to-speech, embeddings — and a picker that long is a picker nobody
+    /// reads. Anything the key can actually reach is folded onto Flash or
+    /// Flash Lite; everything else is ignored. If the key can reach neither,
+    /// the empty list falls back to `startingModels`, which is the same pair.
     func parseModels(_ data: Data) -> [AIModelInfo] {
         guard let root = AIJSON.object(data),
               let models = root["models"] as? [[String: Any]] else { return [] }
-        var out: [AIModelInfo] = []
+
+        var reachable: Set<String> = []
         for model in models {
             guard let raw = model["name"] as? String else { continue }
             let name = raw.replacingOccurrences(of: "models/", with: "")
             let methods = (model["supportedGenerationMethods"] as? [String]) ?? []
             guard methods.contains("generateContent") || methods.contains("streamGenerateContent") else { continue }
-            guard name.contains("gemini") else { continue }
             let lowered = name.lowercased()
+            guard lowered.contains("gemini") else { continue }
             let unwanted = ["embedding", "aqa", "image-generation", "-tts", "-live-", "native-audio"]
             guard !unwanted.contains(where: { lowered.contains($0) }) else { continue }
-            out.append(AIModelInfo(name: name,
-                                   displayName: (model["displayName"] as? String) ?? name,
-                                   detail: (model["description"] as? String) ?? ""))
+            if let canonical = GeminiModels.canonical(name) { reachable.insert(canonical) }
         }
-        return out
+
+        return GeminiModels.allowed
+            .filter { reachable.contains($0) }
+            .map { AIModelInfo(name: $0,
+                               displayName: GeminiModels.title(for: $0),
+                               detail: GeminiModels.detail(for: $0)) }
     }
 
     func chatRequest(_ config: AIConfig, system: String,

@@ -355,13 +355,27 @@ struct PeriodProgress {
 }
 
 struct CompletionLogEntry: Identifiable {
-    enum Kind { case habit, oneOff, schedule }
-    let id = UUID()
+    enum Kind: String { case habit, oneOff, schedule }
     let kind: Kind
     let title: String
     let icon: String
     let colorHex: String?
     let time: Date?
+    /// Breaks a tie when the same thing is ticked twice in one second.
+    var ordinal: Int = 0
+
+    /// Built from what the entry *is*, not from a fresh UUID.
+    ///
+    /// This list is rebuilt from scratch on every redraw of the Progress page
+    /// — and the page redraws on a timer, on any SwiftData change, and on
+    /// every step of picking a day in the chart. With `let id = UUID()` each
+    /// of those rebuilds handed SwiftUI a set of rows it had never seen, so
+    /// it tore the old ones out and animated new ones in: the times showed
+    /// for a moment and then vanished. A stable id makes the same tick the
+    /// same row, and it simply stays put.
+    var id: String {
+        "\(kind.rawValue)|\(title)|\(time?.timeIntervalSince1970 ?? -1)|\(ordinal)"
+    }
 }
 
 struct ProgressEngine {
@@ -499,7 +513,12 @@ struct ProgressEngine {
         for s in scheduleByDay[d] ?? [] {
             out.append(.init(kind: .schedule, title: s.title, icon: "clock", colorHex: s.colorHex, time: s.completedAt))
         }
-        return out.sorted { ($0.time ?? .distantPast) < ($1.time ?? .distantPast) }
+        let sorted = out.sorted { ($0.time ?? .distantPast) < ($1.time ?? .distantPast) }
+        return sorted.enumerated().map { index, entry in
+            var numbered = entry
+            numbered.ordinal = index
+            return numbered
+        }
     }
 
     /// Average completion rate per weekday (index 0 = Monday … 6 = Sunday).
@@ -513,6 +532,56 @@ struct ProgressEngine {
         }
         return (0..<7).map { due[$0] == 0 ? nil : Double(done[$0]) / Double(due[$0]) }
     }
+}
+
+// MARK: - University portals
+
+/// A university portal you added yourself.
+///
+/// LifeTracker ships with none. The University page starts empty with an Add
+/// button, and whichever ERP your college runs — JUNO, ERP, Samarth, Moodle,
+/// anything with a login page — becomes one of these. Each keeps its own
+/// cookies (the web view separates them by host) and its own saved logins.
+@Model
+final class UniPortal {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var urlString: String
+    var colorHex: String
+    var iconName: String
+    var sortIndex: Int
+    var addedAt: Date
+    /// Used to put the one you actually use at the top.
+    var lastOpenedAt: Date?
+
+    init(name: String, urlString: String, colorHex: String = "D9B38C",
+         iconName: String = "graduationcap.fill", sortIndex: Int = 0) {
+        self.id = UUID()
+        self.name = name
+        self.urlString = urlString
+        self.colorHex = colorHex
+        self.iconName = iconName
+        self.sortIndex = sortIndex
+        self.addedAt = .now
+    }
+
+    var url: URL? { URL(string: urlString) }
+
+    /// What the saved logins and the cookie jar are keyed on.
+    var host: String {
+        (url?.host ?? "").replacingOccurrences(of: "www.", with: "")
+    }
+
+    var displayName: String {
+        name.trimmingCharacters(in: .whitespaces).isEmpty ? (host.isEmpty ? "Portal" : host) : name
+    }
+}
+
+/// Icons offered when adding a portal — no logos, just plain signifiers.
+enum PortalIcons {
+    static let all = ["graduationcap.fill", "building.columns.fill", "book.closed.fill",
+                      "globe", "person.text.rectangle.fill", "doc.text.fill",
+                      "chart.bar.doc.horizontal.fill", "studentdesk"]
 }
 
 // MARK: - Study

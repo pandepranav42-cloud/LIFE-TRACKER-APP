@@ -43,6 +43,8 @@ struct GitHubView: View {
     /// Folders that already exist in the selected repo, for the destination menu.
     @State private var folders: [String] = []
     @State private var showAllNotebooks = false
+    /// Files a drop or a pick couldn't read, with the reason macOS gave.
+    @State private var stagingProblems: [String] = []
 
     /// How many notebooks the rail shows before you ask for the rest.
     private static let railPreview = 5
@@ -135,37 +137,50 @@ struct GitHubView: View {
             Group {
                 if width > 1120 {
                     HStack(alignment: .top, spacing: 20) {
-                        mainColumn.frame(maxWidth: 800, alignment: .leading)
-                        Divider().overlay(Palette.hairline)
+                        // No vertical Divider here: inside a ScrollView it asks
+                        // for unbounded height and takes the row's sizing with it.
+                        mainColumn(withColab: false).frame(maxWidth: 800, alignment: .leading)
+                        Rectangle()
+                            .fill(Palette.hairline)
+                            .frame(width: 1)
+                            .frame(maxHeight: 600)
                         colabRail.frame(width: 300)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 20) {
-                        mainColumn
-                        Divider().overlay(Palette.hairline)
-                        colabRail
-                    }
-                    .frame(maxWidth: 1000, alignment: .leading)
+                    // Narrow window: Colab sits inline near the top rather than
+                    // under the repo list, where a long repo would bury it.
+                    mainColumn(withColab: true)
+                        .frame(maxWidth: 1000, alignment: .leading)
                 }
             }
             .padding(AppLayout.pagePadding(width))
+            .padding(.bottom, 48)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .dropDestination(for: URL.self) { urls, _ in
-            stage(urls.filter(\.isFileURL))
-            return true
-        } isTargeted: { dropTargeted = $0 }
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+            acceptDrop(providers)
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item, .folder],
                       allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { stage(urls) }
         }
     }
 
-    private var mainColumn: some View {
+    /// `withColab` folds the Colab section into this column — used when the
+    /// window is too narrow for a side rail. It goes above the repositories,
+    /// because notebooks are what you pick *before* choosing where to push.
+    private func mainColumn(withColab: Bool) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             header
             dropZone
+            stagingProblemList
             if !staged.isEmpty { stagedList }
+            if withColab {
+                VStack(alignment: .leading, spacing: 20) {
+                    colabRail
+                    Divider().overlay(Palette.hairline)
+                }
+            }
             repoPicker
             if let repo = selected {
                 Divider().overlay(Palette.hairline)
@@ -456,6 +471,48 @@ struct GitHubView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // A Button eats the drag before the page behind it sees it, so the
+        // dashed box has to accept the drop itself.
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+            acceptDrop(providers)
+        }
+    }
+
+    /// Files that didn't make it into the queue, and why. Shown right under
+    /// the drop zone rather than inside the staged list, because when macOS
+    /// refuses everything there is no staged list to put it in.
+    @ViewBuilder
+    private var stagingProblemList: some View {
+        if !stagingProblems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                    Text("\(stagingProblems.count) file\(stagingProblems.count == 1 ? "" : "s") couldn't be read")
+                        .font(.mono(11, .semibold))
+                    Spacer()
+                    Button("Dismiss") { stagingProblems = [] }
+                        .buttonStyle(.borderless)
+                        .font(.mono(10))
+                }
+                .foregroundStyle(Color(hex: "B07C2E"))
+
+                ForEach(Array(stagingProblems.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.mono(10))
+                        .foregroundStyle(Palette.mutedText)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text("macOS asks once, per folder, before an app may read Desktop, Documents or Downloads. If you never saw that prompt, turn LifeTracker on under System Settings → Privacy & Security → Files and Folders.")
+                    .font(.mono(10))
+                    .foregroundStyle(Palette.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .background(StudyPalette.callout, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(StudyPalette.line))
+        }
     }
 
     // MARK: Staged files
@@ -467,7 +524,7 @@ struct GitHubView: View {
                 Spacer()
                 Text("\(staged.count) file\(staged.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(staged.reduce(0) { $0 + $1.byteCount }), countStyle: .file))")
                     .font(.mono(11)).foregroundStyle(Palette.mutedText)
-                Button("Clear") { staged = [] }
+                Button("Clear") { staged = []; stagingProblems = [] }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(hub.isBusy)
@@ -513,9 +570,9 @@ struct GitHubView: View {
             }
 
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { folderMenu; folderField; messageField; pushButton; releaseButton }
+                HStack(spacing: 8) { folderField; messageField; pushButton; releaseButton }
                 VStack(spacing: 8) {
-                    HStack(spacing: 8) { folderMenu; folderField }
+                    folderField
                     messageField
                     HStack(spacing: 8) { pushButton; releaseButton }
                 }
@@ -533,10 +590,53 @@ struct GitHubView: View {
                     .font(.mono(11)).foregroundStyle(Color(hex: "C0453F"))
                     .fixedSize(horizontal: false, vertical: true)
             }
+            pushReport
         }
         .padding(16)
         .background(StudyPalette.cardFill, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(StudyPalette.line))
+    }
+
+    /// What the last push actually did, step by step. A push that claims to
+    /// have worked should be something you can go and look at — so the commit
+    /// link is here, and the whole list is copyable when it isn't.
+    @ViewBuilder
+    private var pushReport: some View {
+        if let url = hub.lastCommitURL {
+            Link(destination: url) {
+                Label("See the commit on GitHub", systemImage: "arrow.up.forward.square")
+                    .font(.mono(11))
+            }
+            .foregroundStyle(Palette.accent)
+        }
+        if !hub.pushLog.isEmpty {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(hub.pushLog.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.mono(10))
+                            .foregroundStyle(line.contains("FAILED") || line.contains("NOT verified")
+                                             ? Color(hex: "C0453F") : Palette.mutedText)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Button {
+                        Platform.copy(hub.pushLog.joined(separator: "\n"))
+                        show("Copied the push details")
+                    } label: {
+                        Label("Copy these details", systemImage: "doc.on.doc")
+                            .font(.mono(10))
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.top, 2)
+                }
+                .padding(.top, 4)
+            } label: {
+                Text("What the push did")
+                    .font(.mono(10))
+                    .foregroundStyle(Palette.mutedText)
+            }
+        }
     }
 
     private var transferMeter: some View {
@@ -549,42 +649,52 @@ struct GitHubView: View {
         }
     }
 
-    /// Where in the repo the files land. The menu lists the folders that are
-    /// already there; the field beside it takes a new one.
-    private var folderMenu: some View {
-        Menu {
-            Button("Repository root") { folder = "" }
-            if !folders.isEmpty {
-                Divider()
-                ForEach(folders, id: \.self) { path in
-                    Button(path) { folder = path }
-                }
-            }
-            if selected != nil {
-                Divider()
-                Button("Reload folders") {
-                    if let repo = selected { Task { await loadFolders(repo) } }
-                }
-            }
-        } label: {
-            Label(folder.isEmpty ? "Repository root" : folder, systemImage: "folder")
-                .lineLimit(1)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.bordered)
-        .fixedSize()
-        .disabled(selected == nil)
-        .help("Pick a folder that already exists in the repo")
-    }
-
+    /// Where in the repo the files land — ONE control, not two.
+    ///
+    /// Type a folder, or press the chevron to pick one the repo already has.
+    /// Leave it empty and the files go to the top of the repository, which is
+    /// what pushing did before folders existed.
     private var folderField: some View {
-        TextField("…or type a new folder", text: $folder)
-            .textFieldStyle(.roundedBorder)
-            .font(.mono(12))
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            #endif
+        HStack(spacing: 0) {
+            TextField("Folder (optional) — leave empty for the top of the repo", text: $folder)
+                .textFieldStyle(.plain)
+                .font(.mono(12))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                #endif
+
+            Menu {
+                Button("Top of the repository") { folder = "" }
+                if !folders.isEmpty {
+                    Divider()
+                    ForEach(folders, id: \.self) { path in
+                        Button(path) { folder = path }
+                    }
+                }
+                if selected != nil {
+                    Divider()
+                    Button("Look again") {
+                        if let repo = selected { Task { await loadFolders(repo) } }
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Palette.mutedText)
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .disabled(selected == nil)
+            .help("Folders already in this repo")
+        }
+        .background(Palette.elevated, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Palette.hairline))
     }
 
     private var messageField: some View {
@@ -690,8 +800,10 @@ struct GitHubView: View {
     private var destinationSummary: String {
         guard let repo = selected else { return "Pick a repo below to choose where these files go." }
         let prefix = folder.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
-        let first = staged.first.map { ($0.remotePath as NSString).lastPathComponent } ?? "your files"
         let place = prefix.isEmpty ? repo.name : "\(repo.name)/\(prefix)"
+        // The whole remote path, not just the file name — a dropped folder
+        // keeps its structure, and the preview should show where it lands.
+        let first = staged.first?.remotePath ?? "your files"
         return staged.count > 1
             ? "Going to \(place) — \(staged.count) files"
             : "Going to \(place)/\(first)"
@@ -719,43 +831,114 @@ struct GitHubView: View {
 
     private func stage(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
+        // Hold the permission the drop or the picker granted for as long as we
+        // are looking at these files. Note the `where` is gone: a URL that
+        // isn't security-scoped returns false here and is still perfectly
+        // readable — the old code only kept the scoped ones and dropped the
+        // rest on the floor.
         var accessed: [URL] = []
         for url in urls where url.startAccessingSecurityScopedResource() { accessed.append(url) }
         defer { accessed.forEach { $0.stopAccessingSecurityScopedResource() } }
 
         let expanded = GitHubSync.expand(urls, into: "")
         guard !expanded.isEmpty else {
-            show("Nothing readable in that drop")
+            show(unreadableReason(urls))
             return
         }
 
         // Copy the bytes now, while the drop still grants access. By the time
         // you press Push that permission is gone and the originals would be
         // unreadable — which is how a "successful" push ends up empty.
-        let fm = FileManager.default
-        let root = fm.temporaryDirectory
-            .appendingPathComponent("GitHubStaging/\(UUID().uuidString)", isDirectory: true)
+        let root: URL
+        do {
+            root = try GitHubSync.newStagingFolder()
+        } catch {
+            show("Couldn't make a staging folder: \(error.localizedDescription)")
+            return
+        }
+
         var copies: [GitHubSync.Upload] = []
+        var refused: [String] = []
         for item in expanded {
-            let destination = root.appendingPathComponent(item.remotePath)
             do {
-                try fm.createDirectory(at: destination.deletingLastPathComponent(),
-                                       withIntermediateDirectories: true)
-                try fm.copyItem(at: item.localURL, to: destination)
-                copies.append(GitHubSync.Upload(localURL: destination,
-                                                remotePath: item.remotePath,
-                                                byteCount: item.byteCount))
+                copies.append(try GitHubSync.stageCopy(of: item, into: root))
             } catch {
-                continue
+                refused.append("\((item.remotePath as NSString).lastPathComponent): \(error.localizedDescription)")
             }
         }
 
         guard !copies.isEmpty else {
-            show("Couldn't read those files")
+            // Say what macOS actually objected to. "Couldn't read those files"
+            // with no reason is how this went unnoticed for a whole OS
+            // upgrade — the failure has to name itself.
+            show(refused.first ?? unreadableReason(urls))
+            stagingProblems = refused
             return
+        }
+        stagingProblems = refused
+        if !refused.isEmpty {
+            show("Added \(copies.count), but \(refused.count) couldn't be read — see below")
         }
         let existing = Set(staged.map(\.remotePath))
         staged += copies.filter { !existing.contains($0.remotePath) }
+    }
+
+    /// Why nothing came out of a drop. Almost always one of two things on a
+    /// recent macOS: the folder needs the permission System Settings hands
+    /// out under Privacy & Security → Files and Folders, or the drop carried
+    /// something that isn't a file at all.
+    private func unreadableReason(_ urls: [URL]) -> String {
+        let fm = FileManager.default
+        let missing = urls.filter { !fm.fileExists(atPath: $0.standardizedFileURL.path) }
+        if !missing.isEmpty, let first = missing.first {
+            let folder = first.deletingLastPathComponent().lastPathComponent
+            return "macOS won't let LifeTracker read \(folder.isEmpty ? "that folder" : "“\(folder)”"). Allow it under System Settings → Privacy & Security → Files and Folders, then drop again."
+        }
+        return "Nothing readable in that drop"
+    }
+
+    /// Finder's own drag payload. `dropDestination(for: URL.self)` asks
+    /// SwiftUI to decode a `URL` value, which on recent macOS can arrive as a
+    /// plain path with none of the access that came with the drag. Taking the
+    /// `public.file-url` item straight off the provider is what AppKit itself
+    /// does, and it keeps the permission attached.
+    private func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
+        let type = UTType.fileURL.identifier
+        let wanted = providers.filter { $0.hasItemConformingToTypeIdentifier(type) }
+        guard !wanted.isEmpty else { return false }
+
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in wanted {
+                if let url = await Self.fileURL(from: provider, type: type) { urls.append(url) }
+            }
+            if urls.isEmpty {
+                show("That drop didn't carry any files LifeTracker can open")
+            } else {
+                stage(urls)
+            }
+        }
+        return true
+    }
+
+    /// A `public.file-url` item comes back as an `NSURL`, or as the bytes of
+    /// one, or occasionally as a plain string. All three are handled; nothing
+    /// else is a file.
+    private static func fileURL(from provider: NSItemProvider, type: String) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: type) { item, _ in
+                var found: URL?
+                if let nsurl = item as? NSURL {
+                    found = nsurl as URL
+                } else if let data = item as? NSData,
+                          let url = URL(dataRepresentation: data as Data, relativeTo: nil) {
+                    found = url
+                } else if let text = item as? NSString {
+                    found = URL(string: text as String)
+                }
+                continuation.resume(returning: found?.isFileURL == true ? found : nil)
+            }
+        }
     }
 
     /// Asks Google for the extra read permission, then lists the notebooks.
@@ -2024,6 +2207,18 @@ private struct GitHubProfileView: View {
                 if loading { ProgressView().controlSize(.small) }
                 Text("\(year.total) in the last year")
                     .font(.mono(11)).foregroundStyle(Palette.mutedText)
+                Button {
+                    Task { await load() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.mutedText)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(loading)
+                .help("Ask GitHub again — the graph can take a minute to catch up after a push")
             }
 
             if year.weeks.isEmpty && !loading {

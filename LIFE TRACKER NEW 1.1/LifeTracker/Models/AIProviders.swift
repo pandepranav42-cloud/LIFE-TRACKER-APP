@@ -116,7 +116,7 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
     /// endpoints with no `/models` route at all.
     var startingModels: [String] {
         switch self {
-        case .gemini:    return ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro-latest"]
+        case .gemini:    return GeminiModels.allowed
         case .openAI:    return ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"]
         case .anthropic: return ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1"]
         case .xai:       return ["grok-4-fast", "grok-4", "grok-3-mini"]
@@ -128,6 +128,46 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
     /// files still go in as text extracted on the device.
     var readsImages: Bool { self != .custom }
     var readsPDFs: Bool { self == .gemini || self == .anthropic }
+}
+
+// MARK: - The Gemini models Life AI offers
+//
+// Google's /models route answers with three dozen entries — every preview,
+// every dated snapshot, every experiment. The picker only ever needs the two
+// worth using day to day, so the list is stated here and everything Google
+// sends back is matched against it.
+//
+// Flash is the one to answer with; Flash Lite is cheaper and quicker for
+// short questions. To offer a different pair, change these two lines: the
+// picker, the fallback list and the model that's chosen on a fresh install
+// all read from here.
+enum GeminiModels {
+    static let flash = "gemini-2.5-flash"
+    static let flashLite = "gemini-2.5-flash-lite"
+
+    static var allowed: [String] { [flash, flashLite] }
+
+    /// Google names one model several ways — `gemini-2.5-flash`,
+    /// `gemini-2.5-flash-002`, `gemini-flash-latest`. Anything that resolves
+    /// to one of the two above is folded onto it; everything else is dropped.
+    static func canonical(_ rawName: String) -> String? {
+        let name = rawName.replacingOccurrences(of: "models/", with: "").lowercased()
+        // Lite first: "…flash-lite" contains "…flash" too.
+        if name.contains("flash-lite") || name.contains("flash-8b") { return flashLite }
+        if name.contains("flash") { return flash }
+        return nil
+    }
+
+    /// What to show in the picker.
+    static func title(for name: String) -> String {
+        name == flashLite ? "2.5 Flash Lite" : "2.5 Flash"
+    }
+
+    static func detail(for name: String) -> String {
+        name == flashLite
+            ? "Quickest and cheapest — good for short questions."
+            : "The everyday model: fast, and it reads images and PDFs."
+    }
 }
 
 // MARK: - Everything needed to make one call

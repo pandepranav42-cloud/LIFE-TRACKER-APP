@@ -32,7 +32,10 @@ LifeTracker/
 │   ├── Transfer.swift            # .lifetracker export / import, including secrets when you ask
 │   ├── WidgetBridge.swift        # what the widgets read
 │   ├── Quotes.swift              # QuoteBank — curated quote list + rotation helpers
-│   ├── LifeAI.swift              # Gemini client: streaming, tool calling, chat models, API key
+│   ├── LifeAI.swift              # the assistant client: streaming, tool rounds, model discovery
+│   ├── AIProviders.swift         # who answers — Gemini, OpenAI, Claude, Grok, any OpenAI-compatible endpoint
+│   ├── AIWire.swift              # the three request dialects, behind one interface
+│   ├── VoiceIO.swift             # microphone → text, text → speech, and the hands-free loop
 │   ├── AIContext.swift           # the one gate — everything Life AI may see (Journal excluded)
 │   ├── AIIndex.swift             # on-device RAG: extraction, chunking, BM25 + NLEmbedding, minimal ZIP reader
 │   ├── LifeAIActions.swift       # the seven things Life AI may add to the app
@@ -45,7 +48,7 @@ LifeTracker/
 │   ├── ScheduleView.swift
 │   ├── TimetableView.swift       # blank-grid timetable, category manager, image upload
 │   ├── StudyView.swift           # subjects, syllabus, materials, links, reminders
-│   ├── UniversityView.swift      # JUNO portal in-app: downloads, saved logins, autofill
+│   ├── UniversityView.swift      # university portals you add: the list, the in-app browser, downloads, per-portal logins
 │   ├── GitHubView.swift          # GitHub & Colab console: push, browse, release, profile, notebooks
 │   ├── AccountViews.swift        # accounts + transfer sections
 │   ├── LifeAIPanel.swift         # Life AI: floating logo, chat panel, Markdown + code blocks, Settings section
@@ -243,6 +246,9 @@ Uploads go through GitHub's Contents API — one commit per file, exactly like t
 
 **➔ on a repo card** opens that repository on its own page: the same files and releases, plus the README. Each card also has 🗑 to delete the whole repository — permanent, and it needs the `delete_repo` scope. Right-click a card for "Open on github.com" and "Copy clone URL".
 
+
+**A brand-new repository works too.** A repo with no commits has no branch, and GitHub's Contents API answers every write to it with `409 Conflict` — which is why pushing into a repo created without a README used to dead-end. The app now checks once per push whether the repository has any commits, and if it doesn't, it writes the first one the low-level way (blob → tree → parentless commit → branch ref) with your file already in it. The rest of the files then push normally. A 409 appearing mid-push triggers the same recovery rather than reporting a failure.
+
 ### GitHub profile
 
 Tap your name and avatar at the top of the GitHub page:
@@ -254,19 +260,27 @@ Tap your name and avatar at the top of the GitHub page:
 - **The profile picture** has a camera badge on the avatar. The web view puts up a real macOS open panel for GitHub's "Upload a photo…" button — a web view can't open one by itself, so without that the button silently does nothing. The JUNO portal got the same treatment, so assignment uploads there work too.
 - **The profile picture** (how it works) GitHub has no API for avatars at all, so LifeTracker opens *their* settings page in a web view inside the app rather than throwing you out to Safari — set the picture, close the sheet, and the app reloads your profile. The web view keeps its own cookies, so you only sign in once.
 
-### University portal (JUNO)
+### University portals — add whichever ones you use
 
-Study page → **JUNO** button (top right) opens your university ERP inside LifeTracker (`portal.homeURL`, default `https://erp.dypiu.ac.in/login.htm`). It's a real browser view with its own cookie store, so you stay logged in between launches. Toolbar: back / forward / reload / home, **Save page** (turns the current page — attendance, marks, result, fee receipt — into a PDF inside a subject's Files, and into Drive if connected), plus Open in browser, Copy link, Change portal address, and Sign out of portal (clears its cookies only).
+The app assumes no university. Study → **University** opens a page that starts empty, with **Add portal** in the top right. Paste the address of the page you normally sign in on — JUNO, an ERP, Samarth, Moodle, a results page, a library — give it a name, colour and icon, and it becomes a card. Tap the card and the portal opens inside the app. One button in the browser toolbar takes you back to all of them. (There's a one-tap fill for DY Patil's JUNO in the Add sheet, as a convenience — not a default.)
 
-Downloads inside the portal (the ⤓ buttons — module PPTs, PDFs, zips…) are captured by the app: a progress pill shows in the toolbar and when it finishes you pick the subject to file it into. Files land in that subject's **Files** tab (and Drive, if connected) without ever passing through your Downloads folder.
+Each portal keeps its own cookies, because the web view separates sessions by host, so two universities never sign each other out. **Sign out** clears only that portal's site. Removing a portal signs it out and deletes the card, but leaves its logins in the Keychain, so adding it back restores them.
 
-JUNO opens most of its documents through a pop-up window (`window.open` / `target="_blank"`). A web view with no window handler drops those clicks silently, so the portal view now answers them itself and loads the file in place; blob and data URLs the page builds in memory are read out of the page and handed to Swift as bytes. If a file still opens in the viewer rather than downloading — a PDF preview, usually — use **⋯ → Save the file on screen**, which refetches it with the portal's own cookies. **Save page** falls back to that automatically when the page is already a PDF.
+**Plain http portals work.** Apple blocks http by default, and a lot of college ERPs are still http-only or start on https and redirect down to http — which is what "the resource could not be loaded because the App Transport Security policy requires the use of a secure connection" means. `LifeTracker/Info.plist` carries one exception, `NSAllowsArbitraryLoadsInWebContent`, which relaxes that rule **for web view content only**. Everything the app itself sends — the AI providers, GitHub, Google Drive and Calendar — is still https-only, because that key doesn't cover URLSession. On top of that, a portal whose https fails gets one automatic retry over http, and the Add sheet warns you when an address isn't https. (For an App Store submission this key needs a one-line justification at review: the app embeds university portals chosen by the user, many of which are http-only.)
 
-**ID & Pass** (next to Save page) keeps as many portal logins as you like in the device Keychain — not in the database, and never written into a `.lifetracker` export. Each one has Fill, copy-ID and copy-password buttons, edit and delete.
+One web view is reused as you move between portals rather than one per portal — swapping two web views in and out of the view hierarchy is what used to freeze the page, so the app navigates instead.
 
-You don't have to open that sheet to use them: **tap any sign-in box on the portal and a strip appears over the page** with your saved logins. One tap fills both boxes; the small copy button next to each name copies just the password for the odd field a page won't let anything type into. ✕ hides the strip until the next page.
+Everything the single-portal version did still applies to every portal you add. Toolbar: back / forward / reload / home, **Save page** (turns the current page — attendance, marks, result, fee receipt — into a PDF inside a subject's Files, and into Drive if connected), plus Open in browser, Copy link, All portals, and Sign out.
 
-LifeTracker does not read your marks or attendance automatically — JUNO has no student API, so numbers are not scraped.
+Downloads inside a portal (the ⤓ buttons — module PPTs, PDFs, zips…) are captured by the app: a progress pill shows in the toolbar and when it finishes you pick the subject to file it into. Files land in that subject's **Files** tab (and Drive, if connected) without ever passing through your Downloads folder.
+
+Many portals open their documents through a pop-up window (`window.open` / `target="_blank"`). A web view with no window handler drops those clicks silently, so the portal view answers them itself and loads the file in place; blob and data URLs the page builds in memory are read out of the page and handed to Swift as bytes. If a file still opens in the viewer rather than downloading — a PDF preview, usually — use **⋯ → Save the file on screen**, which refetches it with the portal's own cookies. **Save page** falls back to that automatically when the page is already a PDF.
+
+**ID & Pass** keeps as many logins as you like **per portal**, in the device Keychain — not in the database, and never written into a `.lifetracker` export unless you tick "include logins". Each one has Fill, copy-ID and copy-password buttons, edit and delete. Logins are keyed by the portal's host, so they follow the site rather than the card.
+
+You don't have to open that sheet to use them: **tap any sign-in box on the portal and a strip appears over the page** with that portal's saved logins. One tap fills both boxes; the small copy button next to each name copies just the password for the odd field a page won't let anything type into. ✕ hides the strip until the next page.
+
+LifeTracker does not read your marks or attendance automatically — these portals have no student API, so numbers are not scraped.
 
 ### Life AI — the assistant that floats over every page
 
@@ -290,10 +304,32 @@ On top of that it can see your data and act on it.
 
 **It can change things, but only add.** Seven tools: add a study reminder, a schedule block, a calendar mark (mirrored into Apple / Google Calendar like any other mark), a habit, a syllabus topic, or a note appended to a subject — and search your material. "Plan my week around my deadlines" creates the reminders rather than describing them. Every change shows as a green tick under the answer saying exactly what it did. It cannot delete or overwrite anything; the whole list of what it may do is `Models/LifeAIActions.swift`.
 
-**Model and key.** Google Gemini, called straight from the device — there is no server in between. The API key lives in the Keychain, alongside the GitHub token, and travels with a `.lifetracker` export only when you tick "include logins".
+**Any AI you have a key for.** Life AI is not tied to one company. Settings → Life AI → Keys holds a row per provider — paste a key beside whichever you use and pick that row:
 
-The model list is **not hard-coded**. Google renames and retires Gemini models regularly, and a name that has gone produces a flat `404 … is not found for API version v1beta`. So the app asks your key which models it can actually use, offers exactly those under ⋯ → Model (and in Settings), and sorts them Flash first. If a request still 404s — the model went away mid-session — it re-reads the list, switches to one that exists and retries the same question once, so a rename never becomes a dead end. Errors now show Google's own wording rather than a guess about what went wrong.
+| | |
+|---|---|
+| **Google Gemini** | generous free tier, reads PDFs and images directly |
+| **OpenAI** | GPT models |
+| **Anthropic Claude** | strong at long documents and code |
+| **xAI Grok** | Grok models |
+| **Anything OpenAI-compatible** | DeepSeek, Groq, Mistral, OpenRouter, Together — or a local Ollama / LM Studio, where no key is needed at all |
 
-> ⚠️ `LifeAI.bundledAPIKey` in `Models/LifeAI.swift` ships a working key in source so the app runs on first launch. Anyone with a copy of the build — including anyone who downloads a release published from the GitHub page — can read it out. Before making this repo public: clear that string, rotate the key at aistudio.google.com, and type the new one into Settings → Life AI instead.
+Each provider keeps its own key and its own chosen model, so switching between them loses nothing. Everything else behaves identically whichever one answers: the same tools, the same attachments, the same RAG, the same save-to-notes.
+
+Underneath there are only three shapes of request — Gemini's `parts` / `functionCall`, OpenAI's `messages` / `tool_calls`, and Anthropic's content blocks / `tool_use` — and `Models/AIWire.swift` translates the app's neutral types into each. Adding another provider means naming it in `AIProviders.swift`, not rewriting the client.
+
+The model list is **not hard-coded**. Providers rename and retire models regularly, and a name that has gone produces a flat `404 … is not found`. So the app asks your key which models it can actually use, offers exactly those under ⋯ → Model (and in Settings), and sorts the cheap ones first. If a request still fails that way — the model went away mid-session — it re-reads the list, switches to one that exists and retries the same question once. Errors show the provider's own wording rather than a guess.
+
+Keys live in the Keychain, never in the database, and travel with a `.lifetracker` export only when you tick "include logins".
+
+### Talking to Life AI
+
+The microphone button in the panel turns speech into text; right-click it (long-press on iPad) for **voice chat**, which is the whole loop: it listens, sends as soon as you stop talking, reads the answer back, and starts listening again until you turn it off. A spoken answer is written to be *heard* — short sentences, no headings, no bullet lists, no code read out symbol by symbol.
+
+Every answer also has a **Listen** button, and ⋯ → *Read answers aloud* speaks every reply whether you typed it or said it.
+
+Speech is Apple's, not a service: `SFSpeechRecognizer` for listening and `AVSpeechSynthesizer` for speaking, and recognition stays on the device wherever the language has an on-device model. The voice language is set in Settings → Life AI (English, 한국어, 中文, हिन्दी, मराठी, or whatever the device is set to), and when it's left on automatic the reply is read in whichever script it came back in — so a Korean answer isn't read with an English accent.
+
+Needs the microphone and speech recognition permissions on first use; the Mac build asks for the `audio-input` hardened-runtime entitlement, which is in `LifeTracker.entitlements`.
 
 Chat history is stored in SwiftData (`AIConversation` / `AIMessage`) with earlier chats under the ⋯ menu, and the indexed passages in `AIChunk`. All three are wiped by **Reset all data**, and deleting a file from a subject drops its passages straight away so the assistant can never quote a document you have deleted.

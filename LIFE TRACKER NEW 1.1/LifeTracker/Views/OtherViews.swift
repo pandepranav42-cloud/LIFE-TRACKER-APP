@@ -493,7 +493,7 @@ struct ProgressPageView: View {
                     SectionHeader(title: "Daily completion",
                                   trailing: Platform.isMac ? "click a day to see times" : "tap a day to see times")
                     VStack(alignment: .leading, spacing: 18) {
-                        dailyChart(current)
+                        dailyChart(current, engine: engine)
                             .frame(height: 200)
                         Divider().overlay(Palette.hairline)
                         DayLogView(day: logDay, entries: log, isToday: logDay == engine.today)
@@ -535,9 +535,20 @@ struct ProgressPageView: View {
         .navigationTitle("Progress")
         .onReceive(clock) { now = $0 }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in now = .now }
+        // `chartXSelection` is a live gesture: on the Mac it follows the
+        // pointer and goes back to nil the moment the pointer leaves the
+        // chart. So the picked day is copied somewhere that outlives the
+        // gesture, and everything below the chart reads that instead — a
+        // release of the mouse never blanks the list any more.
         .onChange(of: selectedDay) { _, new in
-            if let new, new <= .now { pinnedDay = cal.startOfDay(for: new) }
+            guard let new, new <= .now else { return }
+            let day = cal.startOfDay(for: new)
+            guard day != pinnedDay else { return }
+            pinnedDay = day
         }
+        // A different range is a different set of days; a pin left over from
+        // the last one would point outside the chart.
+        .onChange(of: rangeRaw) { _, _ in pinnedDay = nil }
     }
 
     private var rangePicker: some View {
@@ -551,14 +562,31 @@ struct ProgressPageView: View {
     // MARK: Chart
 
     @ViewBuilder
-    private func dailyChart(_ period: PeriodProgress) -> some View {
+    private func dailyChart(_ period: PeriodProgress, engine: ProgressEngine) -> some View {
         let points = period.days.filter { $0.rate != nil }
-        if points.isEmpty {
+        // Only give up when there is nothing at all — a range where you ticked
+        // one-offs or schedule tasks but had no habit due still has days worth
+        // opening, and the chart is how you open them.
+        let quiet = period.days.allSatisfy { day in
+            let c = engine.counts(on: day.date)
+            return c.habits == 0 && c.schedule == 0
+        }
+        if points.isEmpty && quiet {
             Text("No habits were due in this range.")
                 .font(.subheadline).foregroundStyle(Palette.mutedText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Chart {
+                // A full-height, invisible bar on every day in the range.
+                // Without it only days that had something *due* could be
+                // picked, so a day you ticked a one-off or a schedule task on
+                // had nothing to click and its times were unreachable. It is
+                // drawn first so the real bars sit on top of it.
+                ForEach(period.days) { d in
+                    BarMark(x: .value("Day", d.date, unit: .day),
+                            y: .value("Completion", 100))
+                        .foregroundStyle(.clear)
+                }
                 ForEach(points) { d in
                     BarMark(x: .value("Day", d.date, unit: .day),
                             y: .value("Completion", (d.rate ?? 0) * 100))
@@ -1120,6 +1148,10 @@ struct SettingsView: View {
         deleteAll(StudyLink.self)
         deleteAll(StudyTodo.self)
         deleteAll(MoodBoardImage.self)
+        deleteAll(UniPortal.self)
+        // …and the plain-text copy of the portal list, or the next visit to
+        // the University page would put every portal straight back.
+        PortalBackup.forgetAll()
         // Life AI's chat history and the passages indexed from your material.
         deleteAll(AIMessage.self)
         deleteAll(AIConversation.self)

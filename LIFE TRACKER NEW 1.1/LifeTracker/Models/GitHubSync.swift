@@ -12,6 +12,7 @@ import SwiftUI
 // `delete_repo` as well if you want the app to delete whole repositories.
 
 struct GitHubUser: Codable, Equatable {
+    let id: Int?
     let login: String
     let name: String?
     let avatar_url: String?
@@ -26,6 +27,15 @@ struct GitHubUser: Codable, Equatable {
     let created_at: String?
 
     var displayName: String { (name?.isEmpty == false) ? name! : login }
+
+    /// The address GitHub itself uses when you commit from the web editor.
+    /// It is always linked to the account, which is what decides whether a
+    /// commit shows up on the contribution graph — a commit authored with an
+    /// address GitHub can't match to you counts for nobody.
+    var commitEmail: String {
+        if let id { return "\(id)+\(login)@users.noreply.github.com" }
+        return "\(login)@users.noreply.github.com"
+    }
 }
 
 /// One square in the contribution graph.
@@ -178,6 +188,13 @@ final class GitHubSync: ObservableObject {
     @Published var progressLabel: String = ""
     /// "file 2 of 7", or the size being sent.
     @Published var progressDetail: String = ""
+
+    /// Every step of the last push, with what GitHub answered. Shown under
+    /// the push controls so "it said it worked" can always be checked against
+    /// what actually happened.
+    @Published private(set) var pushLog: [String] = []
+    /// The commit the last push created, so you can open it on GitHub.
+    @Published private(set) var lastCommitURL: URL?
 
     /// The last contribution year fetched, kept so Life AI can summarise your
     /// GitHub activity without making a GraphQL call of its own on every
@@ -697,29 +714,49 @@ final class GitHubSync: ObservableObject {
 
     /// Expands whatever you dropped into a flat list of files. A folder keeps
     /// its shape: dropping `Sem5/` puts everything under `Sem5/…` in the repo.
+    ///
+    /// Every path is standardised first. A folder dragged out of Finder often
+    /// arrives with a trailing slash, and the old code built the child's
+    /// relative path by cutting `url.path + "/"` off the front — which matches
+    /// nothing when the parent already ends in one. Every file in that folder
+    /// then kept its whole absolute path and landed in the repo as
+    /// `Sem5/Users/you/Desktop/Sem5/notes.pdf`. Trimming the components
+    /// instead can't go wrong that way.
     static func expand(_ urls: [URL], into folder: String) -> [Upload] {
         var uploads: [Upload] = []
         let fm = FileManager.default
         let prefix = folder.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
 
         func add(_ url: URL, path: String) {
-            let size = ((try? fm.attributesOfItem(atPath: url.path)[.size]) as? Int) ?? 0
+            // `resourceValues` sees a file the old `attributesOfItem` call
+            // can't — a document still syncing down from iCloud, say.
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+                ?? ((try? fm.attributesOfItem(atPath: url.path)[.size]) as? Int)
+                ?? 0
             let full = prefix.isEmpty ? path : "\(prefix)/\(path)"
-            uploads.append(Upload(localURL: url, remotePath: full, byteCount: size))
+            uploads.append(Upload(localURL: url, remotePath: cleanPath(full), byteCount: size))
         }
 
-        for url in urls {
+        for raw in urls {
+            let url = raw.standardizedFileURL
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
             if isDir.boolValue {
                 let root = url.lastPathComponent
+                // Reading a folder's contents is a second permission from the
+                // one granted for the folder itself on recent macOS.
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+                let base = url.pathComponents
                 let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey],
                                                options: [.skipsHiddenFiles, .skipsPackageDescendants])
                 while let child = enumerator?.nextObject() as? URL {
-                    var childIsDir: ObjCBool = false
-                    fm.fileExists(atPath: child.path, isDirectory: &childIsDir)
-                    if childIsDir.boolValue { continue }
-                    let relative = child.path.replacingOccurrences(of: url.path + "/", with: "")
+                    let child = child.standardizedFileURL
+                    let isRegular = (try? child.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
+                    guard isRegular else { continue }
+                    let relative = child.pathComponents.dropFirst(base.count).joined(separator: "/")
+                    guard !relative.isEmpty else { continue }
                     add(child, path: "\(root)/\(relative)")
                 }
             } else {
@@ -729,7 +766,61 @@ final class GitHubSync: ObservableObject {
         return uploads
     }
 
-    /// Pushes every file, one commit each (that's what the Contents API does).
+    /// Copies one staged file into the app's own temporary folder, and says
+    /// what went wrong when it can't.
+    ///
+    /// `copyItem` carries a file's ACLs, extended attributes and quarantine
+    /// flag across with it, and on recent macOS that is enough to fail on a
+    /// file the app is perfectly able to *read* — a download still carrying
+    /// its com.apple.quarantine tag, anything tagged by another app. Reading
+    /// the bytes and writing fresh ones asks for nothing but read permission,
+    /// which is exactly what the Colab path has always done, and is why
+    /// notebooks kept pushing when dropped files stopped.
+    static func stageCopy(of item: Upload, into root: URL) throws -> Upload {
+        let fm = FileManager.default
+        let destination = root.appendingPathComponent(item.remotePath)
+        try fm.createDirectory(at: destination.deletingLastPathComponent(),
+                               withIntermediateDirectories: true)
+        if fm.fileExists(atPath: destination.path) { try? fm.removeItem(at: destination) }
+
+        let scoped = item.localURL.startAccessingSecurityScopedResource()
+        defer { if scoped { item.localURL.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let data = try Data(contentsOf: item.localURL, options: .mappedIfSafe)
+            try data.write(to: destination, options: .atomic)
+            return Upload(localURL: destination, remotePath: item.remotePath, byteCount: data.count)
+        } catch {
+            // A file too big to map comfortably still copies.
+            try fm.copyItem(at: item.localURL, to: destination)
+            let size = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? item.byteCount
+            return Upload(localURL: destination, remotePath: item.remotePath, byteCount: size)
+        }
+    }
+
+    /// A fresh folder under the app's own temporary directory — somewhere it
+    /// can always write, whatever macOS thinks of the originals.
+    static func newStagingFolder() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GitHubStaging/\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    /// Pushes everything you staged as ONE commit.
+    ///
+    /// This used to drive the Contents API, a file at a time. That API writes
+    /// onto an existing branch and answers 409 when there isn't one — which is
+    /// every push into a repository that has no commits yet, and the reason a
+    /// fresh repo used to be a dead end.
+    ///
+    /// So it goes through git's own objects instead, exactly as `git push`
+    /// does: a blob per file, one tree on top of whatever the branch already
+    /// points at, one commit, then move the branch. If the branch doesn't
+    /// exist the commit simply has no parent and the branch is created
+    /// pointing at it. Nothing special is needed for an empty repository,
+    /// folders with spaces, or files that already exist.
+    ///
     /// Returns the files that failed, with the reason.
     @MainActor
     func push(_ uploads: [Upload], to repo: GitHubRepo, message: String) async -> [(String, String)] {
@@ -737,59 +828,249 @@ final class GitHubSync: ObservableObject {
         isBusy = true
         progress = 0
         progressPercent = 0
+
+        pushLog = []
+        lastCommitURL = nil
+        note("repo \(repo.full_name) · branch \(repo.branch)")
+
         var failures: [(String, String)] = []
-        let commit = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commitMessage = typed.isEmpty ? Self.defaultMessage(for: uploads) : typed
+
+        // Where the branch is now — nil when the repository has no commits.
+        let head: (commit: String, tree: String)?
+        do {
+            head = try await headOfBranch(repo)
+            note(head == nil
+                 ? "branch has no commits yet — it will be created"
+                 : "branch is at \(head!.commit.prefix(7))")
+        } catch {
+            note("couldn't read the branch: \(error.localizedDescription)")
+            failures.append((repo.branch, "couldn't read the branch: \(error.localizedDescription)"))
+            finishPush(pushed: 0, of: uploads.count, repo: repo, failures: failures)
+            return failures
+        }
+
+        // A blob per file. The steps are weighted so the meter still reaches
+        // the end when the commit itself is made.
+        var entries: [(path: String, sha: String)] = []
+        let steps = Double(uploads.count + 1)
 
         for (index, item) in uploads.enumerated() {
             progressLabel = item.remotePath
             progressDetail = "file \(index + 1) of \(uploads.count)"
-            progress = Double(index) / Double(uploads.count)
+            setProgress(Double(index) / steps)
 
             if item.byteCount > Self.maxUploadBytes {
                 failures.append((item.remotePath, "over 50 MB"))
                 continue
             }
-            guard let data = try? Data(contentsOf: item.localURL) else {
+            guard let data = try? Data(contentsOf: item.localURL, options: .mappedIfSafe) else {
                 failures.append((item.remotePath, "couldn't be read"))
                 continue
             }
-            let encoded = item.remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.remotePath
-            let existing = try? await get("repos/\(repo.full_name)/contents/\(encoded)?ref=\(repo.branch)",
-                                          as: GitHubEntry.self)
-            var body: [String: Any] = [
-                "message": commit.isEmpty ? "Add \((item.remotePath as NSString).lastPathComponent) from LifeTracker" : commit,
-                "content": data.base64EncodedString(),
-                "branch": repo.branch
-            ]
-            if let sha = existing?.sha { body["sha"] = sha }     // updates instead of failing
-
             do {
-                var request = try self.request("repos/\(repo.full_name)/contents/\(encoded)", method: "PUT")
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                let slot = Double(index), count = Double(uploads.count)
-                _ = try await upload(request, body: request.httpBody, file: nil) { fraction in
-                    Task { @MainActor in
-                        self.progress = min(1, (slot + fraction) / count)
-                        self.progressPercent = Int((min(1, (slot + fraction) / count) * 100).rounded())
-                    }
+                let slot = Double(index)
+                let sha = try await makeBlob(repo, data: data) { fraction in
+                    Task { @MainActor in self.setProgress((slot + fraction) / steps) }
                 }
+                entries.append((Self.cleanPath(item.remotePath), sha))
+                note("blob \(Self.cleanPath(item.remotePath)) → \(sha.prefix(7))")
             } catch {
+                note("blob \(item.remotePath) FAILED: \(error.localizedDescription)")
                 failures.append((item.remotePath, error.localizedDescription))
             }
         }
 
+        guard !entries.isEmpty else {
+            finishPush(pushed: 0, of: uploads.count, repo: repo, failures: failures)
+            return failures
+        }
+
+        progressLabel = "Making the commit…"
+        progressDetail = ""
+        setProgress(Double(uploads.count) / steps)
+
+        do {
+            let tree = try await makeTree(repo, base: head?.tree, entries: entries)
+            note("tree → \(tree.prefix(7))")
+            let commit = try await makeCommit(repo, message: commitMessage, tree: tree, parent: head?.commit)
+            note("commit → \(commit.prefix(7))")
+            try await moveBranch(repo, to: commit, branchExists: head != nil)
+            note(head == nil ? "branch created" : "branch moved")
+
+            // Don't take GitHub's word for it — read the branch back. A push
+            // that says it worked has to be a push you can go and look at.
+            let after = try? await headOfBranch(repo)
+            if after?.commit == commit {
+                note("verified: branch now at \(commit.prefix(7))")
+                lastCommitURL = URL(string: "\(repo.html_url)/commit/\(commit)")
+            } else {
+                note("NOT verified — branch is at \(after?.commit.prefix(7) ?? "unknown")")
+                failures.append((repo.branch,
+                                 "GitHub accepted the commit but the branch didn't move to it. Open the ⋯ details below and send me that list."))
+                finishPush(pushed: 0, of: uploads.count, repo: repo, failures: failures)
+                return failures
+            }
+        } catch {
+            note("commit FAILED: \(error.localizedDescription)")
+            // The commit is all-or-nothing, so every file in it failed.
+            for entry in entries { failures.append((entry.path, error.localizedDescription)) }
+            finishPush(pushed: 0, of: uploads.count, repo: repo, failures: failures)
+            return failures
+        }
+
+        finishPush(pushed: entries.count, of: uploads.count, repo: repo, failures: failures)
+        return failures
+    }
+
+    @MainActor
+    private func note(_ line: String) {
+        pushLog.append(line)
+    }
+
+    private func setProgress(_ value: Double) {
+        // Upload callbacks can land after the push has finished; ignore them
+        // rather than leaving the bar stuck at 60% with nothing running.
+        guard isBusy else { return }
+        let clamped = min(1, max(0, value))
+        progress = clamped
+        progressPercent = Int((clamped * 100).rounded())
+    }
+
+    private func finishPush(pushed: Int, of total: Int, repo: GitHubRepo, failures: [(String, String)]) {
         progress = 1
         progressPercent = 100
         progressLabel = ""
         progressDetail = ""
         isBusy = false
-        let done = uploads.count - failures.count
-        status = failures.isEmpty
-            ? "Pushed \(done) file\(done == 1 ? "" : "s") to \(repo.full_name)"
-            : "Pushed \(done) of \(uploads.count) — \(failures.count) failed"
+        if pushed == 0 {
+            status = "Nothing was pushed"
+        } else if failures.isEmpty {
+            status = "Pushed \(pushed) file\(pushed == 1 ? "" : "s") to \(repo.full_name)"
+        } else {
+            status = "Pushed \(pushed) of \(total) — \(failures.count) failed"
+        }
         lastError = failures.isEmpty ? nil : failures.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
-        return failures
+    }
+
+    private static func defaultMessage(for uploads: [Upload]) -> String {
+        if uploads.count == 1 {
+            return "Add \((uploads[0].remotePath as NSString).lastPathComponent) from LifeTracker"
+        }
+        return "Add \(uploads.count) files from LifeTracker"
+    }
+
+    /// git wants a clean relative path: no leading slash, no doubled slashes.
+    static func cleanPath(_ raw: String) -> String {
+        var path = raw
+        while path.contains("//") { path = path.replacingOccurrences(of: "//", with: "/") }
+        while path.hasPrefix("/") { path.removeFirst() }
+        return path
+    }
+
+    // MARK: The git objects behind a push
+
+    /// The commit a branch points at, and its tree — or nil when the branch
+    /// doesn't exist yet, which is what an empty repository looks like.
+    private func headOfBranch(_ repo: GitHubRepo) async throws -> (commit: String, tree: String)? {
+        struct Ref: Decodable { struct Object: Decodable { let sha: String }; let object: Object }
+        struct Commit: Decodable { struct Tree: Decodable { let sha: String }; let tree: Tree }
+        let branch = repo.branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repo.branch
+
+        let ref: Ref
+        do {
+            ref = try await get("repos/\(repo.full_name)/git/ref/heads/\(branch)", as: Ref.self)
+        } catch let error as GitHubError {
+            // Only a real "it isn't there" means the branch is missing. A
+            // timeout or a 500 must not be read as "this repo is empty" —
+            // that would build a commit with no parent and try to start the
+            // branch over.
+            if case .http(let code, _) = error, code == 404 || code == 409 { return nil }
+            throw error
+        }
+        let commit = try await get("repos/\(repo.full_name)/git/commits/\(ref.object.sha)", as: Commit.self)
+        return (ref.object.sha, commit.tree.sha)
+    }
+
+    /// One file's bytes, stored as a git blob. Reports upload progress so the
+    /// meter still moves for a big file.
+    private func makeBlob(_ repo: GitHubRepo, data: Data,
+                          onProgress: @escaping (Double) -> Void) async throws -> String {
+        struct ShaOnly: Decodable { let sha: String }
+        var request = try self.request("repos/\(repo.full_name)/git/blobs", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // The body is handed to the upload task separately, so the request
+        // must not hold a second copy of it — a big file is already 50 MB of
+        // bytes plus 67 MB of base64.
+        let payload = try JSONSerialization.data(
+            withJSONObject: ["content": data.base64EncodedString(), "encoding": "base64"])
+        request.httpBody = nil
+        let reply = try await upload(request, body: payload, file: nil, onProgress: onProgress)
+        guard let sha = try? JSONDecoder().decode(ShaOnly.self, from: reply).sha else {
+            throw GitHubError.badResponse
+        }
+        return sha
+    }
+
+    /// The new tree. `base_tree` carries everything already in the repository
+    /// forward, so a push adds and replaces rather than wiping the branch.
+    private func makeTree(_ repo: GitHubRepo, base: String?,
+                          entries: [(path: String, sha: String)]) async throws -> String {
+        struct ShaOnly: Decodable { let sha: String }
+        var body: [String: Any] = [
+            "tree": entries.map { ["path": $0.path, "mode": "100644", "type": "blob", "sha": $0.sha] }
+        ]
+        if let base { body["base_tree"] = base }
+        return try await send("repos/\(repo.full_name)/git/trees", method: "POST",
+                              json: body, as: ShaOnly.self).sha
+    }
+
+    private func makeCommit(_ repo: GitHubRepo, message: String,
+                            tree: String, parent: String?) async throws -> String {
+        struct ShaOnly: Decodable { let sha: String }
+        // Built in steps: an empty array literal inside a [String: Any] literal
+        // has no type to infer from.
+        let parents: [String] = parent.map { [$0] } ?? []
+        var body: [String: Any] = ["message": message, "tree": tree]
+        body["parents"] = parents
+
+        // Say who wrote it, explicitly. Left out, the commit is authored with
+        // whatever address the token resolves to — and if that address isn't
+        // verified on the account, GitHub counts the commit for nobody and it
+        // never appears on the contribution graph. The account's own noreply
+        // address always matches.
+        if let me = await currentUser() {
+            let stamp = ISO8601DateFormatter().string(from: .now)
+            let who: [String: Any] = ["name": me.displayName,
+                                      "email": me.commitEmail,
+                                      "date": stamp]
+            body["author"] = who
+            body["committer"] = who
+        }
+        return try await send("repos/\(repo.full_name)/git/commits", method: "POST",
+                              json: body, as: ShaOnly.self).sha
+    }
+
+    /// Who is signed in, loading it if the app hasn't yet.
+    @MainActor
+    private func currentUser() async -> GitHubUser? {
+        if let user { return user }
+        await refresh()
+        return user
+    }
+
+    /// Points the branch at the new commit, creating the branch when the
+    /// repository didn't have one.
+    private func moveBranch(_ repo: GitHubRepo, to sha: String, branchExists: Bool) async throws {
+        if branchExists {
+            let branch = repo.branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repo.branch
+            _ = try await sendRaw("repos/\(repo.full_name)/git/refs/heads/\(branch)",
+                                  method: "PATCH", body: ["sha": sha])
+        } else {
+            _ = try await sendRaw("repos/\(repo.full_name)/git/refs", method: "POST",
+                                  body: ["ref": "refs/heads/\(repo.branch)", "sha": sha])
+        }
     }
 
     // MARK: REST plumbing

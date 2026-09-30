@@ -23,6 +23,9 @@ final class PortalWeb: NSObject, ObservableObject,
     @Published var pageTitle = ""
     @Published var currentURL: URL?
     @Published var lastError: String?
+    /// Hosts already retried over http, so a site that fails both ways
+    /// doesn't bounce between the two.
+    private var httpRetried: Set<String> = []
 
     /// A file the portal just downloaded, waiting to be filed into a subject.
     @Published var finishedDownload: DownloadedFile?
@@ -91,9 +94,16 @@ final class PortalWeb: NSObject, ObservableObject,
         ]
     }
 
+    /// Opens a portal's home page, but leaves you where you were if that
+    /// portal is already the one on screen. One web view is shared by every
+    /// portal, so the test is the host — `url == nil` would only ever be true
+    /// once, and switching portals would then show the previous one's page.
     func loadHome(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        if webView.url == nil { webView.load(URLRequest(url: url)) }
+        if webView.url?.host != url.host {
+            if let host = url.host { httpRetried.remove(host) }
+            webView.load(URLRequest(url: url))
+        }
     }
 
     func go(to urlString: String) {
@@ -527,7 +537,49 @@ final class PortalWeb: NSObject, ObservableObject,
         // Cancelled navigations are normal (a link we turned into a download).
         guard !(nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled),
               nsError.code != 102 else { return }
-        Task { @MainActor in lastError = error.localizedDescription }
+
+        // A college portal that has no working https — plenty are still
+        // http-only — gets one automatic retry over http before we give up.
+        if let failed = (nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? webView.url,
+           failed.scheme == "https",
+           Self.worthRetryingOverHTTP.contains(nsError.code),
+           let host = failed.host, !httpRetried.contains(host),
+           var parts = URLComponents(url: failed, resolvingAgainstBaseURL: false) {
+            httpRetried.insert(host)
+            parts.scheme = "http"
+            if let insecure = parts.url {
+                Task { @MainActor in
+                    lastError = "That site has no working https — trying it over http…"
+                    webView.load(URLRequest(url: insecure))
+                }
+                return
+            }
+        }
+
+        Task { @MainActor in lastError = Self.readable(nsError) }
+    }
+
+    /// Failures where falling back to http has a real chance of working.
+    /// A host that doesn't resolve at all is not one of them.
+    private static let worthRetryingOverHTTP: Set<Int> = [
+        NSURLErrorAppTransportSecurityRequiresSecureConnection,
+        NSURLErrorSecureConnectionFailed,
+        NSURLErrorServerCertificateUntrusted,
+        NSURLErrorServerCertificateHasBadDate,
+        NSURLErrorCannotConnectToHost
+    ]
+
+    private static func readable(_ error: NSError) -> String {
+        switch error.code {
+        case NSURLErrorAppTransportSecurityRequiresSecureConnection:
+            return "This portal is served over plain http, which macOS blocks by default. Rebuild the app with the bundled Info.plist so the web view is allowed to load it."
+        case NSURLErrorCannotFindHost:
+            return "That address doesn't resolve — check the portal's address in its Edit sheet."
+        case NSURLErrorNotConnectedToInternet:
+            return "No internet connection."
+        default:
+            return error.localizedDescription
+        }
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in lastError = nil }
@@ -610,28 +662,410 @@ extension PortalWebView: UIViewRepresentable {
 }
 #endif
 
+// MARK: - A second copy of the portal list
+//
+// Portals live in SwiftData like everything else. They also get written out
+// here, as plain JSON in UserDefaults, every time the list changes.
+//
+// The reason is that a portal is the one thing in the app you cannot get back
+// by hand: it is a URL you looked up once, and re-adding it on every launch is
+// exactly the complaint this answers. A SwiftData save that fails — a store
+// migrated by a new OS, a constraint the context won't accept — used to be
+// swallowed by `try?` and the portal was simply gone. Now the write also lands
+// somewhere that cannot fail, and anything missing from the store is put back
+// the next time the page opens.
+//
+// SwiftData stays the source of truth; this is only ever read to restore what
+// isn't there.
+enum PortalBackup {
+    private static let key = "university.portals.backup"
+
+    struct Record: Codable, Equatable {
+        var id: UUID
+        var name: String
+        var urlString: String
+        var colorHex: String
+        var iconName: String
+        var sortIndex: Int
+        var addedAt: Date
+    }
+
+    static func save(_ portals: [UniPortal]) {
+        let records = portals.map {
+            Record(id: $0.id, name: $0.name, urlString: $0.urlString, colorHex: $0.colorHex,
+                   iconName: $0.iconName, sortIndex: $0.sortIndex, addedAt: $0.addedAt)
+        }
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static var saved: [Record] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let records = try? JSONDecoder().decode([Record].self, from: data) else { return [] }
+        return records
+    }
+
+    /// Puts back any portal the store has lost. Returns how many it restored.
+    @discardableResult
+    static func restoreMissing(into context: ModelContext, present: [UniPortal]) -> Int {
+        let records = saved
+        guard !records.isEmpty else { return 0 }
+        let have = Set(present.map(\.id))
+        var restored = 0
+        for record in records where !have.contains(record.id) {
+            let portal = UniPortal(name: record.name, urlString: record.urlString,
+                                   colorHex: record.colorHex, iconName: record.iconName,
+                                   sortIndex: record.sortIndex)
+            portal.id = record.id
+            portal.addedAt = record.addedAt
+            context.insert(portal)
+            restored += 1
+        }
+        if restored > 0 { try? context.save() }
+        return restored
+    }
+
+    /// Called when you remove a portal on purpose, so it doesn't come back.
+    static func forget(_ id: UUID) {
+        let remaining = saved.filter { $0.id != id }
+        guard let data = try? JSONEncoder().encode(remaining) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func forgetAll() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
+
 // MARK: - University page
+//
+// The page itself owns no portal. It starts empty with an Add button, and
+// every university ERP you use is something you added: JUNO at DYPIU, or
+// whatever your college runs. Tap one and it opens in the browser below.
 
 struct UniversityView: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.layoutWidth) private var width
+    @Query(sort: [SortDescriptor(\UniPortal.sortIndex), SortDescriptor(\UniPortal.addedAt)])
+    private var portals: [UniPortal]
+
+    @State private var openPortal: UniPortal?
+    @State private var adding = false
+    @State private var editing: UniPortal?
+    @State private var deleting: UniPortal?
+    /// Shown when the store refuses a write, instead of losing it quietly.
+    @State private var saveProblem: String?
+
+    var body: some View {
+        Group {
+            if let portal = openPortal {
+                PortalBrowser(portal: portal) { openPortal = nil }
+                    .id(portal.id)
+            } else {
+                portalList
+            }
+        }
+        .background(Palette.surface)
+        .navigationTitle("University")
+        .blendedToolbar()
+        // Put back anything the store lost, and keep the plain-text copy in
+        // step with it from then on.
+        .task {
+            PortalBackup.restoreMissing(into: context, present: portals)
+            PortalBackup.save(portals)
+        }
+        .onChange(of: portals) { _, now in PortalBackup.save(now) }
+        .sheet(isPresented: $adding) {
+            PortalEditor(portal: nil) { name, url, color, icon in
+                let portal = UniPortal(name: name, urlString: url, colorHex: color, iconName: icon,
+                                       sortIndex: (portals.map(\.sortIndex).max() ?? 0) + 1)
+                context.insert(portal)
+                // The backup is written first and on its own: if the store
+                // then refuses the insert, the portal is still recoverable on
+                // the next launch rather than gone.
+                PortalBackup.save(portals + [portal])
+                commit("add that portal")
+                openPortal = portal
+            }
+        }
+        .sheet(item: $editing) { portal in
+            PortalEditor(portal: portal) { name, url, color, icon in
+                portal.name = name
+                portal.urlString = url
+                portal.colorHex = color
+                portal.iconName = icon
+                commit("save that change")
+                PortalBackup.save(portals)
+            }
+        }
+        .confirmationDialog(deleting.map { "Remove “\($0.displayName)”?" } ?? "Remove this portal?",
+                            isPresented: Binding(get: { deleting != nil },
+                                                 set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible,
+                            presenting: deleting) { portal in
+            Button("Remove", role: .destructive) {
+                let host = portal.host
+                PortalBackup.forget(portal.id)
+                context.delete(portal)
+                commit("remove that portal")
+                Task { @MainActor in await PortalWeb.shared.clearSession(host: host) }
+                deleting = nil
+            }
+            Button("Cancel", role: .cancel) { deleting = nil }
+        } message: { _ in
+            Text("This removes the portal and signs it out on this device. Your saved logins for it stay in the Keychain, so adding it back restores them.")
+        }
+    }
+
+    // MARK: The list of portals
+
+    private var portalList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .firstTextBaseline) {
+                    PageTitle(title: "University",
+                              subtitle: portals.isEmpty ? "add your college portal to get started"
+                                                        : "\(portals.count) portal\(portals.count == 1 ? "" : "s")")
+                    Spacer(minLength: 12)
+                    Button {
+                        adding = true
+                    } label: {
+                        Label("Add portal", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Palette.accent)
+                    .help("Add any university portal — paste its login page address")
+                }
+
+                if let saveProblem {
+                    Label(saveProblem, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: "C0453F"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if portals.isEmpty {
+                    emptyState
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 16)], spacing: 16) {
+                        ForEach(portals) { portal in
+                            PortalCard(portal: portal)
+                                .onTapGesture { open(portal) }
+                                .contextMenu {
+                                    Button("Open") { open(portal) }
+                                    Button("Edit…") { editing = portal }
+                                    Button("Copy address") { Platform.copy(portal.urlString) }
+                                    Divider()
+                                    Button("Remove…", role: .destructive) { deleting = portal }
+                                }
+                        }
+                    }
+                }
+            }
+            .pageContainer(maxWidth: 1100)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("No portal yet")
+                .font(.mono(18, .bold))
+            Text("LifeTracker doesn't assume which university you're at. Add your college's portal — its normal login page address is all it needs — and it opens here inside the app, with downloads filed straight into a subject and your login one tap away.")
+                .font(.mono(13))
+                .foregroundStyle(Palette.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                adding = true
+            } label: {
+                Label("Add your first portal", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Palette.accent)
+            Text("Works with any site that has a login page — JUNO, ERP, Samarth, Moodle, a library portal, a results page.")
+                .font(.mono(11))
+                .foregroundStyle(Palette.mutedText)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.elevated, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.hairline))
+    }
+
+    private func open(_ portal: UniPortal) {
+        portal.lastOpenedAt = .now
+        try? context.save()          // just a timestamp; not worth a banner
+        openPortal = portal
+    }
+
+    /// Saves, and says so when it can't. `try?` here is what turned a refused
+    /// write into a portal that quietly wasn't there the next morning.
+    private func commit(_ what: String) {
+        do {
+            try context.save()
+            saveProblem = nil
+        } catch {
+            saveProblem = "LifeTracker couldn't \(what): \(error.localizedDescription)"
+        }
+    }
+}
+
+/// One portal in the grid.
+private struct PortalCard: View {
+    let portal: UniPortal
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: portal.iconName)
+                .font(.system(size: 20))
+                .foregroundStyle(Color(hex: portal.colorHex))
+                .frame(width: 44, height: 44)
+                .background(Color(hex: portal.colorHex).opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(portal.displayName)
+                    .font(.mono(14, .bold))
+                    .lineLimit(1)
+                Text(portal.host.isEmpty ? portal.urlString : portal.host)
+                    .font(.mono(11))
+                    .foregroundStyle(Palette.mutedText)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Palette.mutedText)
+        }
+        .padding(16)
+        .background(Palette.elevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(hovering ? Color(hex: portal.colorHex).opacity(0.6) : Palette.hairline))
+        .shadow(color: .black.opacity(hovering ? 0.07 : 0), radius: 8, y: 3)
+        .onHover { hovering = $0 }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Adding or editing a portal
+
+private struct PortalEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    let portal: UniPortal?
+    var onSave: (String, String, String, String) -> Void
+
+    @State private var name = ""
+    @State private var address = ""
+    @State private var color = "D9B38C"
+    @State private var icon = "graduationcap.fill"
+
+    /// A portal needs a real host: that is what its cookies and its saved
+    /// logins are keyed on, so "file:///x" would silently lose both.
+    private var isValid: Bool {
+        LinkTools.normalize(address)?.host?.isEmpty == false
+            && !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(portal == nil ? "Add a university portal" : "Edit portal")
+                .font(.mono(16, .bold))
+            Text("Paste the address of the page you normally sign in on. Anything with a login page works — your college ERP, a results portal, a library.")
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            FormTextField("Name", text: $name, prompt: "JUNO — DYPIU")
+
+            TextField("https://…", text: $address)
+                .textFieldStyle(.roundedBorder)
+                .font(.mono(12))
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                #endif
+
+            if LinkTools.normalize(address)?.scheme == "http" {
+                Label("This portal is http, not https. It will still open — the app allows that for portals — but anything you type goes over the network unencrypted.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "B07C2E"))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 14) {
+                ColorSwatchButton(selection: $color, size: 22)
+                ForEach(PortalIcons.all.prefix(6), id: \.self) { candidate in
+                    Button {
+                        icon = candidate
+                    } label: {
+                        Image(systemName: candidate)
+                            .font(.system(size: 15))
+                            .foregroundStyle(candidate == icon ? Palette.accent : Palette.mutedText)
+                            .frame(width: 30, height: 30)
+                            .background(candidate == icon ? Palette.subtleFill : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 8))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if portal == nil {
+                Button {
+                    name = "JUNO — DYPIU"
+                    address = "https://erp.dypiu.ac.in/login.htm"
+                } label: {
+                    Label("Fill in DY Patil International University (JUNO)", systemImage: "wand.and.stars")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Palette.accent)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button(portal == nil ? "Add" : "Save") {
+                    guard let url = LinkTools.normalize(address) else { return }
+                    onSave(name.trimmingCharacters(in: .whitespaces), url.absoluteString, color, icon)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!isValid)
+            }
+        }
+        .padding(20)
+        .sheetFrame(width: 480, height: 460)
+        .onAppear {
+            guard let portal else { return }
+            name = portal.name
+            address = portal.urlString
+            color = portal.colorHex
+            icon = portal.iconName
+        }
+    }
+}
+
+// MARK: - The browser for one portal
+
+struct PortalBrowser: View {
+    let portal: UniPortal
+    var onClose: () -> Void
+
     @Environment(\.openURL) private var openURL
     @Environment(\.layoutWidth) private var width
     @ObservedObject private var web = PortalWeb.shared
     @ObservedObject private var keys = PortalKeys.shared
 
-    private var siteHome: String { homeURL }
+    private var siteHome: String { portal.urlString }
     /// LifeTracker's own name for the portal — never the page's <title>, which
     /// is where "Welcome to DYP IU" came from.
-    private var siteTitle: String { portalName }
-
-    @AppStorage("portal.homeURL") private var homeURL: String = "https://erp.dypiu.ac.in/login.htm"
-    @AppStorage("portal.name") private var portalName: String = "JUNO — DYPIU"
+    private var siteTitle: String { portal.displayName }
 
     @State private var savingPDF = false
-    @State private var pdfToSave: Data?
+    @State private var pdfToSave: PDFPayload?
     @State private var manualDownloadHint = false
     @State private var confirmSignOut = false
-    @State private var editingHome = false
-    @State private var draftHome = ""
     @State private var showKeys = false
     @State private var toast: String?
 
@@ -663,12 +1097,16 @@ struct UniversityView: View {
             }
         }
         .background(Palette.surface)
-        .navigationTitle("University")
-        .blendedToolbar()
-        .onAppear { web.loadHome(siteHome) }
+        // One web view is reused across portals, so switching means navigating —
+        // two web views swapped in and out is what used to freeze the page.
+        .task(id: portal.id) {
+            keys.use(host: portal.host)
+            web.loadHome(siteHome)
+        }
         // Saving the page itself as PDF
-        .sheet(item: Binding(get: { pdfToSave.map { PDFPayload(data: $0) } },
-                             set: { if $0 == nil { pdfToSave = nil } })) { payload in
+        // Held as the payload itself, not rebuilt from Data each time the body
+        // runs — a fresh id would dismiss and re-present the sheet mid-typing.
+        .sheet(item: $pdfToSave) { payload in
             SaveToSubjectSheet(source: .data(payload.data), suggestedName: suggestedName, ext: "pdf") { message in
                 show(message)
             }
@@ -702,36 +1140,7 @@ struct UniversityView: View {
                 }
             }
         } message: {
-            Text("This clears that site's cookies on this device. The other site, and your LifeTracker data, aren't affected.")
-        }
-        .sheet(isPresented: $editingHome) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Portal address").font(.mono(15, .bold))
-                Text("The page LifeTracker opens for your university.")
-                    .font(.caption).foregroundStyle(Palette.mutedText)
-                TextField("https://…", text: $draftHome)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.mono(12))
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    #endif
-                FormTextField("Name", text: $portalName)
-                HStack {
-                    Spacer()
-                    Button("Cancel") { editingHome = false }
-                    Button("Save") {
-                        if let url = LinkTools.normalize(draftHome) {
-                            homeURL = url.absoluteString
-                            web.go(to: homeURL)
-                        }
-                        editingHome = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-            .padding(20)
-            .sheetFrame(width: 460, height: 260)
+            Text("This clears that site's cookies on this device. Your other portals, and your LifeTracker data, aren't affected.")
         }
     }
 
@@ -820,6 +1229,8 @@ struct UniversityView: View {
     private var toolbar: some View {
         HStack(spacing: 10) {
             Group {
+                Button { onClose() } label: { Image(systemName: "rectangle.grid.2x2") }
+                    .help("All your portals")
                 Button { web.back() } label: { Image(systemName: "chevron.left") }
                     .disabled(!web.canGoBack)
                 Button { web.forward() } label: { Image(systemName: "chevron.right") }
@@ -899,10 +1310,7 @@ struct UniversityView: View {
                 Button("Where do downloads go?") { manualDownloadHint = true }
                 Button("Copy link") { Platform.copy((web.currentURL?.absoluteString ?? siteHome)) }
                 Divider()
-                Button("Change portal address…") {
-                    draftHome = siteHome
-                    editingHome = true
-                }
+                Button("All portals") { onClose() }
                 Button("Sign out of \(siteTitle)", role: .destructive) { confirmSignOut = true }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -939,7 +1347,7 @@ struct UniversityView: View {
         savingPDF = true
         Task { @MainActor in
             do {
-                pdfToSave = try await web.pdf()
+                pdfToSave = PDFPayload(data: try await web.pdf())
             } catch {
                 // A PDF already open in the viewer can't be re-printed — fetch it instead.
                 await web.downloadCurrentPage()
@@ -980,48 +1388,116 @@ struct PortalAccount: Identifiable, Codable, Equatable {
     }
 }
 
-/// Kept in the system Keychain, never in the app's database and never in an
-/// export file — so a shared `.lifetracker` archive can't leak your login.
+/// Saved logins, kept per portal.
+///
+/// They live in the system Keychain — never in the app's database — under a
+/// key made from the portal's host, so adding a university back later finds
+/// its logins waiting, and two universities never see each other's.
 final class PortalKeys: ObservableObject {
     static let shared = PortalKeys()
 
     @Published private(set) var accounts: [PortalAccount] = []
+    /// Which portal's logins are loaded right now.
+    @Published private(set) var host: String = ""
 
-    private static let listKey = "portal.accounts"
+    /// Where a build before multiple portals kept the one list.
+    private static let legacyKey = "portal.accounts"
+    /// Hosts that have logins saved — the export needs to find them all, and
+    /// the Keychain has no "list everything" of its own.
+    private static let hostsKey = "portal.accountHosts"
 
     private init() {
-        load()
         migrateSingleAccount()
     }
 
     var isEmpty: Bool { accounts.isEmpty }
 
-    private func load() {
-        guard let raw = Keychain.get(Self.listKey), let data = raw.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode([PortalAccount].self, from: data) else { return }
-        accounts = decoded
+    static func keychainKey(for host: String) -> String { "portal.accounts.\(host)" }
+
+    static var knownHosts: [String] {
+        UserDefaults.standard.stringArray(forKey: hostsKey) ?? []
+    }
+
+    /// An import writes the Keychain items straight in, so the index of which
+    /// hosts have logins has to be rebuilt from the keys that arrived —
+    /// otherwise the next export from this device would leave them all out.
+    static func rememberHosts(_ hosts: [String]) {
+        let merged = Set(knownHosts + hosts.filter { !$0.isEmpty })
+        UserDefaults.standard.set(Array(merged).sorted(), forKey: hostsKey)
+    }
+
+    /// Every Keychain account holding portal logins, for `.lifetracker` export.
+    static var allKeychainKeys: [String] {
+        [legacyKey] + knownHosts.map { keychainKey(for: $0) }
+    }
+
+    /// Switch to a portal. Loads its logins, adopting the single list an
+    /// earlier build saved if this is the portal that list belonged to.
+    func use(host newHost: String) {
+        host = newHost
+        accounts = []
+        guard !newHost.isEmpty else { return }
+        load()
+        if accounts.isEmpty { adoptLegacyIfItBelongsHere() }
     }
 
     /// Re-reads the Keychain — used after an import brings logins across.
     func reload() {
-        accounts = []
-        load()
+        let current = host
+        host = ""
+        use(host: current)
+    }
+
+    private func load() {
+        guard let raw = Keychain.get(Self.keychainKey(for: host)),
+              let data = raw.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([PortalAccount].self, from: data) else { return }
+        accounts = decoded
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(accounts),
-              let text = String(data: data, encoding: .utf8) else { return }
-        Keychain.set(accounts.isEmpty ? nil : text, for: Self.listKey)
+        guard !host.isEmpty else { return }
+        var hosts = Self.knownHosts
+        if accounts.isEmpty {
+            Keychain.set(nil, for: Self.keychainKey(for: host))
+            hosts.removeAll { $0 == host }
+        } else {
+            guard let data = try? JSONEncoder().encode(accounts),
+                  let text = String(data: data, encoding: .utf8) else { return }
+            Keychain.set(text, for: Self.keychainKey(for: host))
+            if !hosts.contains(host) { hosts.append(host) }
+        }
+        UserDefaults.standard.set(hosts, forKey: Self.hostsKey)
     }
 
-    /// Picks up the single ID/password an earlier build stored.
+    /// A build before multiple portals kept one list, for whatever single
+    /// portal address was set then. If that is the portal being opened now,
+    /// the logins move across; otherwise they are left alone.
+    private func adoptLegacyIfItBelongsHere() {
+        guard let raw = Keychain.get(Self.legacyKey), !raw.isEmpty,
+              let data = raw.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([PortalAccount].self, from: data),
+              !decoded.isEmpty else { return }
+        let legacyHome = UserDefaults.standard.string(forKey: "portal.homeURL")
+            ?? "https://erp.dypiu.ac.in/login.htm"
+        let legacyHost = (URL(string: legacyHome)?.host ?? "")
+            .replacingOccurrences(of: "www.", with: "")
+        guard legacyHost == host else { return }
+        accounts = decoded
+        persist()
+        Keychain.set(nil, for: Self.legacyKey)
+    }
+
+    /// Picks up the single ID/password an even earlier build stored.
     private func migrateSingleAccount() {
-        guard accounts.isEmpty else { return }
+        guard Keychain.get(Self.legacyKey) == nil else { return }
         let user = Keychain.get("portal.username") ?? ""
         let pass = Keychain.get("portal.password") ?? ""
         guard !user.isEmpty || !pass.isEmpty else { return }
-        accounts = [PortalAccount(label: Keychain.get("portal.note") ?? "", username: user, password: pass)]
-        persist()
+        let one = [PortalAccount(label: Keychain.get("portal.note") ?? "", username: user, password: pass)]
+        if let data = try? JSONEncoder().encode(one), let text = String(data: data, encoding: .utf8) {
+            Keychain.set(text, for: Self.legacyKey)
+        }
         Keychain.set(nil, for: "portal.username")
         Keychain.set(nil, for: "portal.password")
         Keychain.set(nil, for: "portal.note")
