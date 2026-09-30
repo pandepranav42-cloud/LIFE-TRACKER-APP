@@ -698,6 +698,7 @@ struct GitHubView: View {
                 .foregroundStyle(Palette.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        contributionCheck
         if !hub.pushLog.isEmpty {
             DisclosureGroup {
                 VStack(alignment: .leading, spacing: 3) {
@@ -724,6 +725,57 @@ struct GitHubView: View {
                 Text("What the push did")
                     .font(.mono(10))
                     .foregroundStyle(Palette.mutedText)
+            }
+        }
+    }
+
+    /// What GitHub actually counts for you today, read back from the same
+    /// contributions data its graph is drawn from.
+    ///
+    /// The graph on github.com is a cached page and lags a push by minutes;
+    /// this asks the source directly, so "did that count?" stops being a
+    /// guess. A zero here with commits pushed is a real signal, and the most
+    /// common cause is an address GitHub hasn't verified.
+    @ViewBuilder
+    private var contributionCheck: some View {
+        if hub.contributionNote != nil || hub.todayCount != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    if let count = hub.todayCount {
+                        Text("GitHub counts \(count) contribution\(count == 1 ? "" : "s") for you today")
+                            .font(.mono(10, .semibold))
+                            .foregroundStyle(count > 0 ? Palette.accent : Color(hex: "C0453F"))
+                    } else {
+                        Text("Contributions today: not checked yet")
+                            .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                    }
+                    Button("Check again") {
+                        Task { await hub.refreshTodayCount() }
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.mono(10))
+                    Spacer()
+                }
+
+                if hub.todayCount == 0 {
+                    Text("Your commit is on GitHub, but nothing is counting today. Almost always the commit's author address isn't verified on your account.")
+                        .font(.mono(10))
+                        .foregroundStyle(Palette.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !hub.unverifiedEmails.isEmpty {
+                    Label("GitHub has NOT verified: \(hub.unverifiedEmails.joined(separator: ", ")). Commits authored with those count for nobody — verify them under GitHub → Settings → Emails.",
+                          systemImage: "envelope.badge.shield.half.filled")
+                        .font(.mono(10))
+                        .foregroundStyle(Color(hex: "C0453F"))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let note = hub.emailCheckNote {
+                    Text(note)
+                        .font(.mono(10))
+                        .foregroundStyle(Palette.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

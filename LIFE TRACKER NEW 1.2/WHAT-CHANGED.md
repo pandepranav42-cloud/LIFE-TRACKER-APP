@@ -150,3 +150,34 @@ so, and names the two cases where it wouldn't:
 - **A private repository.** It counts, but only shows on your graph with
   "Include private contributions on my profile" switched on in GitHub →
   Settings → Profile.
+
+## 9. Proving a push counted, from inside the app
+
+GitHub's contribution rules are invisible: a commit authored with an address
+GitHub has not **verified** still shows your name, your avatar and a link to
+your profile — and counts for nobody. Nothing in the app could see that, and
+nothing on github.com says it either.
+
+Two checks now run, so the answer stops being a guess.
+
+- **After every verified push**, the app reads back how many contributions
+  GitHub counts for you *today*, from `contributionsCollection` — the same
+  data its graph is drawn from, not the cached profile page. The push report
+  shows the number, with a **Check again** button since the count can lag a
+  push by a minute or two.
+- **On connect and refresh**, the app asks GitHub which of your addresses it
+  has verified (`GET /user/emails`) and names any it has not, in red, with
+  where to fix them. This needs `user:email` on the token; without it GitHub
+  answers 403 and the app says so rather than failing.
+
+A count of zero with a commit on GitHub is the signal worth acting on, and
+the panel says what it almost always means.
+
+### And no, the app does not run git
+
+It never has. It calls GitHub's Git Data API directly: a blob per file, a
+tree, a commit, then the branch ref is moved — the same four objects
+`git push` creates, made server-side instead of locally. The result is
+indistinguishable: clone the repo with plain `git clone` and `git log` shows
+ordinary commits with ordinary parents and authors. The API is not why a
+contribution does or doesn't count; the author address is.

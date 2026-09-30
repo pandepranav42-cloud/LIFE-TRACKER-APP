@@ -122,6 +122,19 @@ struct GitHubTextFile {
     var sha: String?
 }
 
+/// One address on the account, and whether GitHub has verified it.
+///
+/// This is the fact the contribution graph turns on and the one nothing in
+/// the app could see before. An unverified address still renders your name
+/// and avatar on a commit and still links to your profile — it just counts
+/// for nobody. Needs `user:email` on the token (the `user` scope covers it).
+struct GitHubEmail: Codable, Identifiable {
+    let email: String
+    let primary: Bool
+    let verified: Bool
+    var id: String { email }
+}
+
 /// A published (or draft) release on a repository.
 struct GitHubRelease: Codable, Identifiable, Equatable {
     let id: Int
@@ -235,6 +248,15 @@ final class GitHubSync: ObservableObject {
     /// Whether the last commit will show on the contribution graph, and why not.
     @Published private(set) var contributionNote: String?
 
+    /// How many contributions GitHub currently counts for you today, straight
+    /// from the same data its graph draws. nil when it hasn't been asked.
+    @Published private(set) var todayCount: Int?
+    /// Addresses on the account GitHub has NOT verified. A commit authored
+    /// with one of these counts for nobody.
+    @Published private(set) var unverifiedEmails: [String] = []
+    /// Set when the token can't read the email list at all.
+    @Published private(set) var emailCheckNote: String?
+
     /// The last contribution year fetched, kept so Life AI can summarise your
     /// GitHub activity without making a GraphQL call of its own on every
     /// message. Filled in whenever the profile screen loads the green dots.
@@ -292,6 +314,7 @@ final class GitHubSync: ObservableObject {
         do {
             user = try await get("user", as: GitHubUser.self)
             await loadRepos()
+            await checkEmails()
         } catch {
             lastError = error.localizedDescription
         }
@@ -467,6 +490,42 @@ final class GitHubSync: ObservableObject {
         } catch {
             lastError = error.localizedDescription
             return ContributionYear()
+        }
+    }
+
+    /// What GitHub counts for you today, from the same contributions data its
+    /// own graph is drawn from — so it answers "did that push count?" without
+    /// a browser, and without waiting for the profile page's cache.
+    @MainActor
+    @discardableResult
+    func refreshTodayCount() async -> Int? {
+        guard let login = user?.login else { return nil }
+        let year = await contributions(for: login)
+        let today = Calendar.current.startOfDay(for: .now)
+        let count = year.weeks.flatMap { $0 }
+            .first { Calendar.current.isDate($0.date, inSameDayAs: today) }?
+            .count
+        todayCount = count
+        return count
+    }
+
+    /// Asks GitHub which of your addresses it has verified.
+    ///
+    /// Needs `user:email` on the token. Without it GitHub answers 403 and the
+    /// check is simply skipped — it is a diagnostic, never a blocker.
+    @MainActor
+    func checkEmails() async {
+        do {
+            let all = try await get("user/emails", as: [GitHubEmail].self)
+            unverifiedEmails = all.filter { !$0.verified }.map(\.email)
+            emailCheckNote = nil
+        } catch {
+            unverifiedEmails = []
+            if let github = error as? GitHubError, case .http(403, _) = github {
+                emailCheckNote = "Add the user:email scope to your token and LifeTracker can also check which of your addresses GitHub has verified."
+            } else {
+                emailCheckNote = nil
+            }
         }
     }
 
@@ -983,6 +1042,12 @@ final class GitHubSync: ObservableObject {
                 let counts = Self.contributionNote(for: repo, user: user)
                 contributionNote = counts
                 note(counts)
+                // Ask GitHub what it now counts for today. This is the only
+                // honest answer to "did that push count?" — the graph is
+                // drawn from exactly this data.
+                if let today = await refreshTodayCount() {
+                    note("GitHub counts \(today) contribution\(today == 1 ? "" : "s") for you today")
+                }
             } else {
                 note("NOT verified — branch is at \(after?.commit.prefix(7) ?? "unknown")")
                 failures.append((repo.branch,
