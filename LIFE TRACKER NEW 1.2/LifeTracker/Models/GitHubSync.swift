@@ -977,8 +977,9 @@ final class GitHubSync: ObservableObject {
             if after?.commit == commit {
                 note("verified: branch now at \(commit.prefix(7))")
                 lastCommitURL = URL(string: "\(repo.html_url)/commit/\(commit)")
-                contributionNote = Self.contributionNote(for: repo, user: user)
-                note(contributionNote ?? "")
+                let counts = Self.contributionNote(for: repo, user: user)
+                contributionNote = counts
+                note(counts)
             } else {
                 note("NOT verified — branch is at \(after?.commit.prefix(7) ?? "unknown")")
                 failures.append((repo.branch,
@@ -1082,6 +1083,10 @@ final class GitHubSync: ObservableObject {
 
     /// Every file the branch already has, as path → blob sha, read in one
     /// call. An empty repository (no tree yet) simply has none.
+    ///
+    /// Main-actor isolated, like `push` itself, because it writes to the push
+    /// log. The network call inside simply suspends, so nothing is blocked.
+    @MainActor
     private func existingBlobs(_ repo: GitHubRepo, tree: String?) async -> [String: String] {
         guard let tree else { return [:] }
         struct Tree: Decodable {
