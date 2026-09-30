@@ -51,7 +51,6 @@ enum Transfer {
         var subjects: [SubjectDTO] = []
         var todos: [TodoDTO] = []
         var moodImages: [AssetDTO] = []
-        var portals: [PortalDTO] = []
 
         var summary: String {
             let files = subjects.reduce(0) { $0 + $1.materials.count } + moodImages.count + (timetableImage == nil ? 0 : 1)
@@ -98,10 +97,6 @@ enum Transfer {
     }
     struct LinkDTO: Codable { var id: UUID; var urlString: String; var title: String; var note: String; var addedAt: Date }
     struct TodoDTO: Codable { var title: String; var day: Int; var isDone: Bool; var createdAt: Date }
-    struct PortalDTO: Codable {
-        var id: UUID, name: String, urlString: String, colorHex: String
-        var iconName: String, sortIndex: Int, addedAt: Date
-    }
 
     static var deviceName: String {
         #if os(macOS)
@@ -121,9 +116,7 @@ enum Transfer {
     /// your GitHub token and every saved portal login. They are *not* included
     /// unless you tick the box, because anyone holding the file could then
     /// sign in as you.
-    private static var secretKeys: [String] {
-        ["github.token"] + PortalKeys.allKeychainKeys + AIProviderStore.allKeychainKeys
-    }
+    private static let secretKeys = ["github.token", "portal.accounts", "gemini.apiKey"]
 
     // MARK: - Export
 
@@ -217,11 +210,6 @@ enum Transfer {
         for t in (try? context.fetch(FetchDescriptor<StudyTodo>())) ?? [] {
             manifest.todos.append(TodoDTO(title: t.title, day: t.day, isDone: t.isDone, createdAt: t.createdAt))
         }
-        for portal in (try? context.fetch(FetchDescriptor<UniPortal>())) ?? [] {
-            manifest.portals.append(PortalDTO(id: portal.id, name: portal.name, urlString: portal.urlString,
-                                              colorHex: portal.colorHex, iconName: portal.iconName,
-                                              sortIndex: portal.sortIndex, addedAt: portal.addedAt))
-        }
         for key in settingKeys {
             if let value = UserDefaults.standard.object(forKey: key) {
                 manifest.settings[key] = String(describing: value)
@@ -298,7 +286,6 @@ enum Transfer {
             deleteAll(SyllabusTopic.self); deleteAll(StudyMaterial.self)
             deleteAll(StudyLink.self); deleteAll(StudySubject.self)
             deleteAll(StudyTodo.self); deleteAll(MoodBoardImage.self)
-            deleteAll(UniPortal.self)
             try? context.save()
         }
 
@@ -313,7 +300,6 @@ enum Transfer {
         let existingSlots = Set((try? context.fetch(FetchDescriptor<TimetableSlot>()))?.map(\.id) ?? [])
         let existingBlocks = Set(((try? context.fetch(FetchDescriptor<TimetableBlock>())) ?? []).map { "\($0.day)|\($0.startTime)|\($0.endTime)" })
         let existingImages = Set((try? context.fetch(FetchDescriptor<MoodBoardImage>()))?.map(\.id) ?? [])
-        let existingPortals = Set((try? context.fetch(FetchDescriptor<UniPortal>()))?.map(\.id) ?? [])
 
         // --- Subjects, syllabus, files, links
         for s in manifest.subjects where !existingSubjects.contains(s.id) {
@@ -423,13 +409,6 @@ enum Transfer {
             todo.createdAt = t.createdAt
             context.insert(todo)
         }
-        for p in manifest.portals where !existingPortals.contains(p.id) {
-            let portal = UniPortal(name: p.name, urlString: p.urlString, colorHex: p.colorHex,
-                                   iconName: p.iconName, sortIndex: p.sortIndex)
-            portal.id = p.id
-            portal.addedAt = p.addedAt
-            context.insert(portal)
-        }
         for img in manifest.moodImages where !existingImages.contains(img.id) {
             guard let data = blob(img.id) else { continue }
             let image = MoodBoardImage(data: data, isCover: img.isCover)
@@ -443,15 +422,7 @@ enum Transfer {
         for (key, value) in manifest.secrets ?? [:] {
             Keychain.set(value, for: key)
         }
-        if (manifest.secrets ?? [:]).keys.contains(where: { $0.hasPrefix("portal.accounts") }) {
-            // The Keychain items landed, but the index of which hosts have
-            // logins lives in UserDefaults — rebuild it from the keys, or this
-            // device's own next export would omit every one of them.
-            PortalKeys.rememberHosts((manifest.secrets ?? [:]).keys
-                .filter { $0.hasPrefix("portal.accounts.") }
-                .map { String($0.dropFirst("portal.accounts.".count)) })
-            PortalKeys.shared.reload()
-        }
+        if manifest.secrets?["portal.accounts"] != nil { PortalKeys.shared.reload() }
 
         for (key, value) in manifest.settings {
             let defaults = UserDefaults.standard
