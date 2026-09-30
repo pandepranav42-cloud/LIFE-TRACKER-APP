@@ -168,11 +168,17 @@ enum GitHubError: LocalizedError {
     case badResponse
     case tooLarge(String)
     case noAuthor
+    /// The connection died mid-transfer. URLSession calls this "cancelled",
+    /// which reads as though somebody pressed a button — nobody did, and the
+    /// word has caused enough confusion for one project.
+    case interrupted
 
     var errorDescription: String? {
         switch self {
         case .noToken:
             return "Connect a GitHub token first."
+        case .interrupted:
+            return "The connection to GitHub was interrupted. Nothing was lost — press Push to send it again."
         case .noAuthor:
             return "Couldn't work out which GitHub account to author the commit as, so nothing was committed — a commit authored with an address GitHub can't verify never reaches your contribution graph. Pull down to refresh the profile and push again."
         case .http(let code, let message):
@@ -669,7 +675,7 @@ final class GitHubSync: ObservableObject {
                 box.observation?.invalidate()
                 box.observation = nil
                 if let error {
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: Self.readable(error))
                     return
                 }
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -1227,6 +1233,12 @@ final class GitHubSync: ObservableObject {
     /// transfer died in transit, not that GitHub refused it. Treating those as
     /// permanent is what turned one wobble on a big notebook into "that file
     /// didn't go through".
+    /// Restates a dropped transfer in words that describe what happened.
+    /// Anything GitHub itself said is passed through untouched.
+    private static func readable(_ error: Error) -> Error {
+        isTransient(error) && !(error is GitHubError) ? GitHubError.interrupted : error
+    }
+
     private static func isTransient(_ error: Error) -> Bool {
         let code = (error as? URLError)?.code
         switch code {
@@ -1257,9 +1269,9 @@ final class GitHubSync: ObservableObject {
             do {
                 return try await sendBlob(repo, data: data, onProgress: onProgress)
             } catch {
-                lastError = error
-                guard Self.isTransient(error), attempt < 3 else { throw error }
-                await note("\(error.localizedDescription) — retrying (\(attempt) of 2)")
+                lastError = Self.readable(error)
+                guard Self.isTransient(error), attempt < 3 else { throw Self.readable(error) }
+                await note("the connection dropped — trying again (\(attempt) of 2)")
                 // Start this file's meter over; the next attempt re-sends it.
                 onProgress(0)
                 try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
@@ -1290,7 +1302,13 @@ final class GitHubSync: ObservableObject {
         request.httpBody = nil
 
         onProgress(0.05)
-        let (reply, response) = try await Self.session.upload(for: request, from: payload)
+        let reply: Data
+        let response: URLResponse
+        do {
+            (reply, response) = try await Self.session.upload(for: request, from: payload)
+        } catch {
+            throw Self.readable(error)
+        }
         onProgress(1)
 
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -1429,7 +1447,7 @@ final class GitHubSync: ObservableObject {
                 box.observation?.invalidate()
                 box.observation = nil
                 if let error {
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: Self.readable(error))
                     return
                 }
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -1464,7 +1482,13 @@ final class GitHubSync: ObservableObject {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await Self.session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await Self.session.data(for: request)
+        } catch {
+            throw Self.readable(error)
+        }
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {
             throw GitHubError.http(code, Self.message(from: data))
