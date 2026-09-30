@@ -12,3 +12,8 @@ xcuserdata/
 DerivedData/
 build/
 .DS_Store
+
+# The SIH submission deck. It carries six students' full names and enrolment
+# numbers, and this repository is public — so it stays out of git unless the
+# team decides otherwise.
+LifeTracker-SIH2026-IdeaSubmission.pptx
