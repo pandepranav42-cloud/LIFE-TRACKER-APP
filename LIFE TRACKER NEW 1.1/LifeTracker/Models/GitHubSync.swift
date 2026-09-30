@@ -739,9 +739,6 @@ final class GitHubSync: ObservableObject {
         progressPercent = 0
         var failures: [(String, String)] = []
         let commit = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Asked once, not per file: a brand-new repository needs its first
-        // commit before anything can be written into it.
-        var needsFirstCommit = await hasNoCommits(repo)
 
         for (index, item) in uploads.enumerated() {
             progressLabel = item.remotePath
@@ -766,22 +763,6 @@ final class GitHubSync: ObservableObject {
             ]
             if let sha = existing?.sha { body["sha"] = sha }     // updates instead of failing
 
-            // A repository with no commits has no branch for the Contents API
-            // to write onto, so every file comes back 409. Lay the first
-            // commit down the low-level way, carrying this file with it.
-            if needsFirstCommit {
-                do {
-                    try await firstCommit(repo, path: item.remotePath, data: data,
-                                          message: body["message"] as? String ?? "Initial commit from LifeTracker")
-                    needsFirstCommit = false
-                    continue
-                } catch {
-                    failures.append((item.remotePath,
-                                     "couldn't start the repository off: \(error.localizedDescription)"))
-                    continue
-                }
-            }
-
             do {
                 var request = try self.request("repos/\(repo.full_name)/contents/\(encoded)", method: "PUT")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -794,19 +775,6 @@ final class GitHubSync: ObservableObject {
                     }
                 }
             } catch {
-                // 409 here means the branch went missing under us — check, and
-                // start the repository off rather than reporting a dead end.
-                if Self.isConflict(error), await hasNoCommits(repo) {
-                    do {
-                        try await firstCommit(repo, path: item.remotePath, data: data,
-                                              message: body["message"] as? String ?? "Initial commit from LifeTracker")
-                        continue
-                    } catch {
-                        failures.append((item.remotePath,
-                                         "couldn't start the repository off: \(error.localizedDescription)"))
-                        continue
-                    }
-                }
                 failures.append((item.remotePath, error.localizedDescription))
             }
         }
@@ -822,49 +790,6 @@ final class GitHubSync: ObservableObject {
             : "Pushed \(done) of \(uploads.count) — \(failures.count) failed"
         lastError = failures.isEmpty ? nil : failures.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
         return failures
-    }
-
-    // MARK: Starting an empty repository off
-
-    /// True when the repository has no commits at all — the state you get from
-    /// "New repo" with the README box left unticked. GitHub still reports a
-    /// default branch name for such a repo, so the branch list is what tells
-    /// you, not `default_branch`.
-    private func hasNoCommits(_ repo: GitHubRepo) async -> Bool {
-        guard let data = try? await sendRaw("repos/\(repo.full_name)/branches?per_page=1",
-                                            method: "GET", body: nil),
-              let list = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return false }
-        return list.isEmpty
-    }
-
-    /// Creates the repository's very first commit, with your file already in
-    /// it: blob → tree → commit with no parent → the branch ref. The Contents
-    /// API can't do this, which is the whole reason pushing into a fresh repo
-    /// used to fail.
-    private func firstCommit(_ repo: GitHubRepo, path: String, data: Data, message: String) async throws {
-        struct ShaOnly: Decodable { let sha: String }
-
-        let blob = try await send("repos/\(repo.full_name)/git/blobs", method: "POST",
-                                  json: ["content": data.base64EncodedString(), "encoding": "base64"],
-                                  as: ShaOnly.self)
-        let tree = try await send("repos/\(repo.full_name)/git/trees", method: "POST",
-                                  json: ["tree": [["path": path,
-                                                   "mode": "100644",
-                                                   "type": "blob",
-                                                   "sha": blob.sha]]],
-                                  as: ShaOnly.self)
-        let commit = try await send("repos/\(repo.full_name)/git/commits", method: "POST",
-                                    json: ["message": message, "tree": tree.sha],
-                                    as: ShaOnly.self)
-        // The ref reply has no top-level sha, so nothing is decoded from it.
-        _ = try await sendRaw("repos/\(repo.full_name)/git/refs", method: "POST",
-                              body: ["ref": "refs/heads/\(repo.branch)", "sha": commit.sha])
-    }
-
-    private static func isConflict(_ error: Error) -> Bool {
-        guard let github = error as? GitHubError,
-              case .http(let code, _) = github else { return false }
-        return code == 409
     }
 
     // MARK: REST plumbing
