@@ -25,6 +25,8 @@ struct GitHubUser: Codable, Equatable {
     let public_repos: Int?
     let html_url: String?
     let created_at: String?
+    /// The account's public profile address, when it has one set.
+    let email: String?
 
     var displayName: String { (name?.isEmpty == false) ? name! : login }
 
@@ -174,7 +176,11 @@ struct GitHubRelease: Codable, Identifiable, Equatable {
 /// commit with the address the token belongs to — the account's primary email,
 /// the same thing `git push` does with GitHub's own credentials.
 enum CommitIdentity: String, CaseIterable, Identifiable {
-    /// Let GitHub use the account's primary email (what counted before).
+    /// Name the account's own primary address on every commit.
+    case primary
+    /// Name an address you type in yourself.
+    case custom
+    /// Say nothing and let GitHub stamp the token's address.
     case accountDefault
     /// Force `id+login@users.noreply.github.com`.
     case noreply
@@ -183,13 +189,19 @@ enum CommitIdentity: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .accountDefault: return "My account's email"
+        case .primary:        return "My GitHub email"
+        case .custom:         return "A specific address…"
+        case .accountDefault: return "Let GitHub decide"
         case .noreply:        return "GitHub noreply address"
         }
     }
 
     var blurb: String {
         switch self {
+        case .primary:
+            return "Every commit is authored with your account's own address, named explicitly."
+        case .custom:
+            return "Every commit is authored with the address you typed. It has to be one GitHub has verified on your account, or the commit counts for nobody."
         case .accountDefault:
             return "GitHub stamps the commit with the address your token belongs to — the same thing git push does."
         case .noreply:
@@ -294,6 +306,10 @@ final class GitHubSync: ObservableObject {
     @Published private(set) var unverifiedEmails: [String] = []
     /// Set when the token can't read the email list at all.
     @Published private(set) var emailCheckNote: String?
+    /// The account's primary address, as GitHub reports it.
+    @Published private(set) var primaryEmail: String?
+    /// Whether GitHub has verified that primary address.
+    @Published private(set) var primaryEmailVerified: Bool?
 
     /// The last contribution year fetched, kept so Life AI can summarise your
     /// GitHub activity without making a GraphQL call of its own on every
@@ -323,11 +339,24 @@ final class GitHubSync: ObservableObject {
     static var commitIdentity: CommitIdentity {
         get {
             CommitIdentity(rawValue: UserDefaults.standard.string(forKey: identityKey) ?? "")
-                ?? .accountDefault
+                ?? .primary
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: identityKey) }
     }
     private static let identityKey = "github.commitIdentity"
+
+    /// The address typed in for `.custom`.
+    static var customCommitEmail: String {
+        get {
+            (UserDefaults.standard.string(forKey: customEmailKey) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        set {
+            UserDefaults.standard.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: customEmailKey)
+        }
+    }
+    private static let customEmailKey = "github.commitEmail.custom"
 
     private static let tokenKey = "github.token"
     /// GitHub's Contents API tops out around 100 MB; keep a safe margin.
@@ -585,9 +614,17 @@ final class GitHubSync: ObservableObject {
         do {
             let all = try await get("user/emails", as: [GitHubEmail].self)
             unverifiedEmails = all.filter { !$0.verified }.map(\.email)
+            if let main = all.first(where: \.primary) ?? all.first {
+                primaryEmail = main.email
+                primaryEmailVerified = main.verified
+            }
             emailCheckNote = nil
         } catch {
             unverifiedEmails = []
+            // Without user:email the profile's public address is still a fair
+            // guess at which one to author with.
+            primaryEmail = user?.email
+            primaryEmailVerified = nil
             if let github = error as? GitHubError, case .http(403, _) = github {
                 emailCheckNote = "Add the user:email scope to your token and LifeTracker can also check which of your addresses GitHub has verified."
             } else {
@@ -1359,13 +1396,17 @@ final class GitHubSync: ObservableObject {
         // decision to GitHub, which stamps the commit with the address the
         // token belongs to. On this account that is the address the days
         // worth 53 and 81 contributions were authored with.
+        let me = await currentUser()
+        let address: String?
         switch Self.commitIdentity {
-        case .accountDefault:
-            break
-        case .noreply:
-            guard let me = await currentUser() else { throw GitHubError.noAuthor }
+        case .primary:        address = await primaryCommitEmail()
+        case .custom:         address = Self.customCommitEmail.isEmpty ? nil : Self.customCommitEmail
+        case .noreply:        address = me?.commitEmail
+        case .accountDefault: address = nil
+        }
+        if let address, let me {
             let who: [String: Any] = ["name": me.displayName,
-                                      "email": me.commitEmail,
+                                      "email": address,
                                       "date": Self.commitStamp()]
             body["author"] = who
             body["committer"] = who
@@ -1386,6 +1427,17 @@ final class GitHubSync: ObservableObject {
         formatter.formatOptions = [.withInternetDateTime]
         formatter.timeZone = TimeZone.current
         return formatter.string(from: date)
+    }
+
+    /// The account's own address, loading the email list if it hasn't been
+    /// read yet. Falls back to the public profile address, then to nothing —
+    /// and nothing simply means GitHub stamps the commit itself.
+    @MainActor
+    private func primaryCommitEmail() async -> String? {
+        if let primaryEmail, !primaryEmail.isEmpty { return primaryEmail }
+        await checkEmails()
+        if let primaryEmail, !primaryEmail.isEmpty { return primaryEmail }
+        return user?.email
     }
 
     /// Who is signed in, loading it if the app hasn't yet.

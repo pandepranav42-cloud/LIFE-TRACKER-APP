@@ -47,6 +47,8 @@ struct GitHubView: View {
     @State private var stagingProblems: [String] = []
     /// Which address goes on the commits this app makes.
     @State private var commitIdentity: CommitIdentity = GitHubSync.commitIdentity
+    /// The address typed in when "A specific address…" is chosen.
+    @State private var customEmail: String = GitHubSync.customCommitEmail
 
     /// How many notebooks the rail shows before you ask for the rest.
     private static let railPreview = 5
@@ -761,20 +763,52 @@ struct GitHubView: View {
 
                 // Which address goes on the commit decides whether the day
                 // reaches your graph, so it belongs where you can see it.
-                HStack(spacing: 8) {
-                    Text("Author commits as")
-                        .font(.mono(10)).foregroundStyle(Palette.mutedText)
-                    Picker("", selection: $commitIdentity) {
-                        ForEach(CommitIdentity.allCases) { Text($0.title).tag($0) }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("Author commits as")
+                            .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                        Picker("", selection: $commitIdentity) {
+                            ForEach(CommitIdentity.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .onChange(of: commitIdentity) { _, now in
+                            GitHubSync.commitIdentity = now
+                            show(now.blurb)
+                        }
+                        if commitIdentity == .primary, let mine = hub.primaryEmail {
+                            Text(mine)
+                                .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                        Spacer()
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    .onChange(of: commitIdentity) { _, now in
-                        GitHubSync.commitIdentity = now
-                        show(now.blurb)
+
+                    if commitIdentity == .custom {
+                        TextField("you@example.com", text: $customEmail)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.mono(11))
+                            .frame(maxWidth: 320)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
+                            .onChange(of: customEmail) { _, now in
+                                GitHubSync.customCommitEmail = now
+                            }
+                        Text("Must be an address GitHub has verified on your account, or the commit counts for nobody.")
+                            .font(.mono(10)).foregroundStyle(Palette.mutedText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer()
+
+                    if hub.primaryEmailVerified == false, let mine = hub.primaryEmail {
+                        Label("GitHub has not verified \(mine) — verify it under Settings → Emails or commits authored with it will not count.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(.mono(10))
+                            .foregroundStyle(Color(hex: "C0453F"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 if hub.todayCount == 0 {
